@@ -1,0 +1,325 @@
+  /* ---------- RECAP / COMPLETE ---------- */
+  #complete {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,204,51,0.12), transparent 34%),
+      rgba(6,10,20,0.98);
+    display: none;
+    flex-direction: column;
+    z-index: 50;
+    padding: 22px clamp(14px, 3vw, 34px) 34px;
+    overflow: auto;
+  }
+  #complete.show { display: flex; }
+  .recaphead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    width: 100%;
+    padding: 10px 0 16px;
+    background: linear-gradient(180deg, rgba(6,10,20,0.98), rgba(6,10,20,0.82) 78%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .recapintro { min-width: 0; }
+  #complete h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 2px;
+    font-size: clamp(42px, 6vw, 72px);
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent-glow);
+    margin: 0;
+    line-height: 0.95;
+  }
+  .recapsub { color: var(--text-dim); font-size: 15px; margin-top: 8px; }
+  .recaptools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .recaptools button {
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.075);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 10px 15px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .recaptools button.active {
+    background: var(--accent);
+    color: #06090f;
+    border-color: var(--accent);
+  }
+
+  #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+
+  /* ---------- RECAP AWARDS ---------- */
+  #recapawards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin: 4px 0 18px;
+  }
+  .awardcard {
+    background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .awardcard .alabel {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .awardcard .aplayer { font-size: 24px; font-weight: 800; margin-top: 8px; }
+  .awardcard .ameta { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
+  .awardcard.grade { border-color: rgba(255,204,51,0.35); }
+  .awardcard.grade .aplayer { color: var(--accent); }
+  #recapgrid {
+    width: 100%;
+    min-width: 0;
+  }
+  .recapteams {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 14px;
+    width: 100%;
+    padding-bottom: 20px;
+  }
+  .recapteam {
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent);
+    border-radius: 10px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(15,22,38,0.92));
+    box-shadow: 0 20px 45px rgba(0,0,0,0.28);
+    overflow: hidden;
+  }
+  .recapteam-head {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .gradebadge {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255,204,51,0.14);
+    border: 1px solid rgba(255,204,51,0.45);
+    color: var(--accent);
+    font-size: 22px;
+    font-weight: 900;
+  }
+  .recapteam-name {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .recapteam-meta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .scorepill {
+    justify-self: end;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .scorepill.value { color: var(--value); background: rgba(53,212,136,0.14); }
+  .scorepill.reach { color: var(--reach); background: rgba(255,107,94,0.14); }
+  .recapsummary {
+    padding: 12px 14px 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .recapplayer-list {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px 14px;
+    gap: 7px;
+  }
+  .recapplayer {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .recapplayer:first-child { border-top: none; }
+  .recappick {
+    color: var(--accent);
+    font-weight: 900;
+    font-size: 12px;
+    min-width: 38px;
+  }
+  .recappname {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-weight: 800;
+  }
+  .recappmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .adppill {
+    font-size: 12px;
+    font-weight: 900;
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.07);
+    white-space: nowrap;
+  }
+  .adppill.value { color: var(--value); background: rgba(53,212,136,0.14); }
+  .adppill.reach { color: var(--reach); background: rgba(255,107,94,0.14); }
+  .recapboard {
+    overflow: auto;
+    width: 100%;
+    padding-bottom: 18px;
+  }
+  .recapboard .recap-final-grid {
+    min-width: max-content;
+  }
+  .recaplineups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 14px;
+    width: 100%;
+    padding-bottom: 20px;
+  }
+  .lineupcard {
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(15,22,38,0.92));
+    overflow: hidden;
+  }
+  .lineuphead {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .lineupname {
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lineupmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .lineupsection {
+    padding: 12px 14px 4px;
+  }
+  .lineuplabel {
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 1.4px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .lineupslot {
+    display: grid;
+    grid-template-columns: 42px minmax(0,1fr) auto;
+    gap: 9px;
+    align-items: center;
+    padding: 7px 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .lineupslot:first-of-type { border-top: none; }
+  .slotlabel {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .slotplayer {
+    color: var(--text);
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .slotmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .lineupnotes {
+    padding: 10px 14px 14px;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.kiosk #controls { display: none; }
+  body.kiosk { cursor: none; }
+  body.low-power #beams,
+  body.low-power #orbitdots,
+  body.low-power #spotlight::before {
+    display: none;
+  }
+  body.low-power #logopattern.reveal {
+    opacity: 0.14;
+  }
+  body.low-power #headshot,
+  body.low-power #draftedby {
+    box-shadow: 0 14px 36px rgba(0,0,0,0.4);
+  }
+  body.low-power .orbit.reveal {
+    animation: none;
+    opacity: 0.85;
+  }
+  body.low-power #pulsering.reveal {
+    animation: none;
+    opacity: 0;
+  }
+  #spotlight.catch-up #beams,
+  #spotlight.catch-up #orbitdots,
+  #spotlight.catch-up #pulsering,
+  #spotlight.catch-up::before {
+    display: none;
+  }
+  #spotlight.catch-up #logopattern.reveal {
+    opacity: 0.1;
+  }
+  #spotlight.catch-up .orbit.reveal {
+    animation: none;
+    opacity: 0.65;
+  }
+

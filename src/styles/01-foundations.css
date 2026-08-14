@@ -1,0 +1,65 @@
+
+  :root {
+    --bg: #060a14;
+    --panel: #0f1626;
+    --panel2: #141d33;
+    --accent: #ffcc33;
+    --accent-glow: rgba(255, 204, 51, 0.35);
+    --text: #f4f6fb;
+    --text-dim: #8b93a7;
+    --qb: #e74c3c;
+    --rb: #2ecc71;
+    --wr: #3498db;
+    --te: #e67e22;
+    --k: #9b59b6;
+    --def: #7f8c8d;
+    --rookie: #ff5fa2;
+    --veteran: #5ec8ff;
+    --reach: #ff6b5e;
+    --value: #35d488;
+    --font-display: "Anton", "Segoe UI", Arial, sans-serif;
+    --font-body: "Inter", "Segoe UI", Arial, sans-serif;
+    --pos-glow: var(--accent-glow);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: radial-gradient(ellipse at top, #101a30 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+
+  /* subtle broadcast-style vignette + grain over everything for depth */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 90;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+  }
+
+  #app {
+    height: 100vh;
+    display: none;
+    flex-direction: column;
+  }
+  #app.ready { display: flex; }
+
+  /* ---------- SCROLLBAR HIDING (for TV casting) ---------- */
+  #gridview, #teamview, #setupscreen .draftlist {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #gridview::-webkit-scrollbar,
+  #teamview::-webkit-scrollbar,
+  #setupscreen .draftlist::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
