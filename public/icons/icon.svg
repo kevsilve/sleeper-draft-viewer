@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sleeper Draft Viewer">
+  <rect width="512" height="512" rx="108" fill="#060a14"/>
+  <path d="M92 104h328v76H92zM92 218h208v76H92zM92 332h328v76H92z" fill="#ffcc33"/>
+  <circle cx="365" cy="256" r="58" fill="#35d488"/>
+  <path d="m340 257 18 18 36-42" fill="none" stroke="#060a14" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

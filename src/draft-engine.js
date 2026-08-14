@@ -1,57 +1,16 @@
-import express from "express";
-import { createServer } from "http";
-import { WebSocketServer } from "ws";
-
-const app = express();
-app.use(express.json());
-
-const REQUESTED_PORT = Number(process.env.PORT || 3000);
-const PORT_WAS_EXPLICIT = !!process.env.PORT;
-const MAX_PORT_ATTEMPTS = 10;
-const server = createServer(app);
-const wss = new WebSocketServer({ server });
-
-function startServer(port = REQUESTED_PORT, attempt = 1) {
-  server.once("error", (err) => {
-    if (err?.code === "EADDRINUSE") {
-      if (!PORT_WAS_EXPLICIT && attempt < MAX_PORT_ATTEMPTS) {
-        const nextPort = port + 1;
-        console.log(`Port ${port} is already in use. Trying http://localhost:${nextPort}...`);
-        startServer(nextPort, attempt + 1);
-        return;
-      }
-
-      const fallbackHint = PORT_WAS_EXPLICIT
-        ? "Choose a different PORT value or stop the process using that port."
-        : `Tried ports ${REQUESTED_PORT}-${port}. Stop an existing server or run with PORT=${port + 1}.`;
-      console.error(`Could not start: port ${port} is already in use. ${fallbackHint}`);
-      process.exit(1);
-    }
-    throw err;
-  });
-
-  server.listen(port, () => {
-    const note = port === REQUESTED_PORT ? "" : ` (port ${REQUESTED_PORT} was busy)`;
-    console.log(`Broadcast Engine v7 running on http://localhost:${port}${note}`);
-  });
-}
-
-startServer();
+import { readPlayerCache, writePlayerCache } from "./player-store.js";
 
 // --------------------
 // CONFIG
 // --------------------
-const POLL_INTERVAL = 400;
+const POLL_INTERVAL = 500;
 const REVEAL_GAP = 160;        // preserve pick order without making catch-up feel delayed
 const MAX_BACKOFF = 5000;
 const FETCH_TIMEOUT_MS = 4500; // never let one stalled Sleeper request freeze the live feed
 const CLIENT_SYNC_INTERVAL = 2000;
-const WS_PING_INTERVAL = 10000;
 const DEFAULT_TEAMS = 12;
 const REACH_THRESHOLD = 10;    // picks of separation before we call something a reach/value
-const PLAYERS_REFRESH_MS = 12 * 60 * 60 * 1000; // 12h
-const SLEEPER_USERNAME = process.env.SLEEPER_USERNAME || null;
-const PRECONFIGURED_DRAFT_ID = process.env.DRAFT_ID || null;
+const PLAYERS_REFRESH_MS = 24 * 60 * 60 * 1000; // Sleeper asks clients to fetch this at most daily
 
 // --------------------
 // STATE (per-draft, reset on configureDraft)
@@ -84,8 +43,9 @@ let stateRevision = 0;
 let eventQueue = [];
 let processing = false;
 let backoff = POLL_INTERVAL;
-let metaBackoff = 800;
+let metaBackoff = 1000;
 let lastTradeCheckAt = 0;
+let feedDelayed = false;
 
 // Long-lived caches that persist across draft switches
 const userNameCache = new Map();   // user_id -> {display_name, username}
@@ -98,11 +58,6 @@ let adpCache = new Map();          // player_id -> numeric adp (overall)
 let adpAvailable = false;
 
 // --------------------
-// STATIC
-// --------------------
-app.use(express.static("public"));
-
-// --------------------
 // FETCH HELPER
 // --------------------
 async function fetchJSON(url, { timeout = FETCH_TIMEOUT_MS } = {}) {
@@ -112,7 +67,6 @@ async function fetchJSON(url, { timeout = FETCH_TIMEOUT_MS } = {}) {
   try {
     const res = await fetch(url + bust, {
       cache: "no-store",
-      headers: { "Cache-Control": "no-cache" },
       signal: controller.signal
     });
     if (!res.ok) throw new Error(`${res.status} ${url}`);
@@ -126,63 +80,57 @@ async function fetchJSON(url, { timeout = FETCH_TIMEOUT_MS } = {}) {
 }
 
 // --------------------
-// WS
+// LOCAL EVENT BUS
 // --------------------
+const subscribers = new Set();
+
 function broadcast(payload) {
-  const msg = JSON.stringify(payload);
-  for (const client of wss.clients) {
-    if (client.readyState === 1) client.send(msg);
+  for (const subscriber of subscribers) {
+    try {
+      subscriber(payload);
+    } catch (err) {
+      console.error("Draft event subscriber failed:", err);
+    }
   }
 }
 
-wss.on("connection", (ws) => {
-  ws.isAlive = true;
-  ws.on("pong", () => { ws.isAlive = true; });
-  if (!currentDraftId) {
-    ws.send(JSON.stringify({ type: "UNCONFIGURED" }));
-    return;
-  }
-  ws.send(
-    JSON.stringify({
-      type: "INIT",
-      draft_id: currentDraftId,
-      all_picks: allPicks,
-      teams_order: buildTeamsOrder(),
-      clock: currentClockPayload(seenPicks.size + 1),
-      draft_complete: draftComplete,
-      draft_status: draftMeta?.status || null,
-      league_context: buildLeagueContext(),
-      adp_available: adpAvailable,
-      revision: stateRevision,
-      server_time: Date.now()
-    })
-  );
-});
-
-// TCP can remain half-open for a surprisingly long time on Wi-Fi. Protocol
-// pings clean up dead sockets, while lightweight SYNC messages let browsers
-// detect a silent path and verify that they have every pick.
-setInterval(() => {
-  for (const ws of wss.clients) {
-    if (ws.isAlive === false) {
-      ws.terminate();
-      continue;
-    }
-    ws.isAlive = false;
-    ws.ping();
-  }
-}, WS_PING_INTERVAL).unref();
-
-setInterval(() => {
-  if (!currentDraftId) return;
-  broadcast({
-    type: "SYNC",
+function initialPayload() {
+  if (!currentDraftId) return { type: "UNCONFIGURED" };
+  return {
+    type: "INIT",
     draft_id: currentDraftId,
+    all_picks: allPicks,
+    teams_order: buildTeamsOrder(),
+    clock: currentClockPayload(seenPicks.size + 1),
+    draft_complete: draftComplete,
+    draft_status: draftMeta?.status || null,
+    league_context: buildLeagueContext(),
+    adp_available: adpAvailable,
     revision: stateRevision,
-    pick_count: allPicks.length,
     server_time: Date.now()
-  });
-}, CLIENT_SYNC_INTERVAL).unref();
+  };
+}
+
+export function subscribeToDraftEvents(subscriber) {
+  subscribers.add(subscriber);
+  return () => subscribers.delete(subscriber);
+}
+
+export function requestDraftSnapshot() {
+  broadcast(initialPayload());
+}
+
+function markFeedDelayed(message) {
+  if (feedDelayed) return;
+  feedDelayed = true;
+  broadcast({ type: "FEED_STATUS", status: "delayed", message });
+}
+
+function markFeedHealthy() {
+  if (!feedDelayed) return;
+  feedDelayed = false;
+  broadcast({ type: "FEED_STATUS", status: "restored" });
+}
 
 function enqueue(event) {
   eventQueue.push(event);
@@ -233,11 +181,12 @@ function resetDraftState() {
   eventQueue = [];
   processing = false;
   backoff = POLL_INTERVAL;
-  metaBackoff = 800;
+  metaBackoff = 1000;
+  feedDelayed = false;
   stateRevision++;
 }
 
-async function configureDraft(draftId) {
+export async function configureDraft(draftId) {
   // Validate first so we don't tear down a working draft on a bad ID
   const meta = await fetchJSON(`https://api.sleeper.app/v1/draft/${draftId}`);
   if (!meta || meta.error) throw new Error("Draft not found");
@@ -257,6 +206,25 @@ async function configureDraft(draftId) {
   broadcast({ type: "RESET" });
 
   return meta;
+}
+
+export async function validateDraft(draftId) {
+  const normalized = String(draftId || "").trim();
+  if (!normalized) throw new Error("draft_id is required");
+  const meta = await fetchJSON(`https://api.sleeper.app/v1/draft/${normalized}`);
+  if (!meta || meta.error) throw new Error("Draft not found");
+  return meta;
+}
+
+export function getDraftStatus() {
+  return {
+    configured: !!currentDraftId,
+    draft_id: currentDraftId,
+    season: draftMeta?.season || null,
+    status: draftMeta?.status || null,
+    teams: draftMeta?.settings?.teams || null,
+    adp_available: adpAvailable
+  };
 }
 
 // --------------------
@@ -469,7 +437,7 @@ async function resolveTeam(pick) {
 // --------------------
 // SNAKE DRAFT MATH
 // --------------------
-function slotForPick(pickNo, teams) {
+export function slotForPick(pickNo, teams) {
   const round = Math.ceil(pickNo / teams);
   const posInRound = ((pickNo - 1) % teams) + 1;
   const slot = round % 2 === 1 ? posInRound : teams - posInRound + 1;
@@ -558,6 +526,14 @@ function loadPlayersCache() {
 }
 
 async function loadPlayersCacheUncached() {
+  const cached = await readPlayerCache();
+  if (cached?.players) {
+    playersCache = new Map(Object.entries(cached.players));
+    playersCacheLoadedAt = cached.savedAt || 0;
+    backfillExperienceTags();
+    if (Date.now() - playersCacheLoadedAt < PLAYERS_REFRESH_MS) return;
+  }
+
   try {
     const raw = await fetchJSON(`https://api.sleeper.app/v1/players/nfl`);
     const next = new Map();
@@ -582,10 +558,11 @@ async function loadPlayersCacheUncached() {
     }
     playersCache = next;
     playersCacheLoadedAt = Date.now();
+    await writePlayerCache(Object.fromEntries(next), playersCacheLoadedAt);
     backfillExperienceTags();
     console.log(`Players cache loaded: ${playersCache.size} players`);
   } catch (err) {
-    console.error("Failed to load players cache:", err.message);
+    console.error(cached ? "Using stale player cache:" : "Failed to load players cache:", err.message);
   }
 }
 
@@ -657,7 +634,7 @@ function currentSeason() {
   return now.getMonth() < 2 ? year - 1 : year;
 }
 
-function normalizePlayerName(name) {
+export function normalizePlayerName(name) {
   return String(name || "")
     .toLowerCase()
     .normalize("NFD")
@@ -772,29 +749,8 @@ async function loadADP() {
     console.log(`ADP data unavailable from Sleeper this session (${err.message}). Trying Fantasy Football Calculator fallback...`);
   }
 
-  if (!adpAvailable) {
-    const fallbackFound = await loadFantasyFootballCalculatorADP(season);
-    adpAvailable = fallbackFound > 20;
-    if (!adpAvailable) {
-      console.log("No usable ADP source found this session - reach/value indicators disabled.");
-    }
-  }
+  if (!adpAvailable) console.log("No usable ADP source found this session - reach/value indicators disabled.");
 }
-
-// Manual ADP override/merge, e.g. pasted from an external source, keyed by player_id.
-app.post("/api/adp", (req, res) => {
-  const body = req.body || {};
-  let merged = 0;
-  for (const [playerId, val] of Object.entries(body)) {
-    const num = Number(val);
-    if (!Number.isNaN(num) && num > 0) {
-      adpCache.set(String(playerId), num);
-      merged++;
-    }
-  }
-  if (merged > 0) adpAvailable = true;
-  res.json({ ok: true, merged, adp_available: adpAvailable });
-});
 
 function adpInfoFor(playerId, pickNo) {
   const adp = adpCache.get(String(playerId));
@@ -944,9 +900,11 @@ async function pollDraft() {
       checkTradedPicks();
     }
 
+    markFeedHealthy();
     backoff = POLL_INTERVAL;
   } catch (err) {
     console.error("Polling error:", err.message);
+    markFeedDelayed(err.message);
     backoff = Math.min(backoff * 2, MAX_BACKOFF);
   } finally {
     setTimeout(pollDraft, backoff);
@@ -974,9 +932,11 @@ async function pollDraftMeta() {
     } else {
       broadcast(currentClockPayload(allPicks.length + 1));
     }
-    metaBackoff = 800;
+    markFeedHealthy();
+    metaBackoff = 1000;
   } catch (err) {
     console.error("Metadata polling error:", err.message);
+    markFeedDelayed(err.message);
     metaBackoff = Math.min(metaBackoff * 1.6, MAX_BACKOFF);
   } finally {
     setTimeout(pollDraftMeta, metaBackoff);
@@ -994,7 +954,7 @@ function seasonCandidates() {
   return [String(s - 1), String(s), String(s + 1)];
 }
 
-async function detectDraftsForUsername(username) {
+export async function detectDraftsForUsername(username) {
   const user = await fetchJSON(`https://api.sleeper.app/v1/user/${encodeURIComponent(username)}`);
   if (!user || !user.user_id) throw new Error("Sleeper user not found");
 
@@ -1074,44 +1034,9 @@ async function detectDraftsForUsername(username) {
 }
 
 // --------------------
-// REST API
+// LEGACY SERVER STARTUP (kept commented for migration traceability)
 // --------------------
-app.get("/api/status", (req, res) => {
-  res.json({
-    configured: !!currentDraftId,
-    draft_id: currentDraftId,
-    season: draftMeta?.season || null,
-    status: draftMeta?.status || null,
-    teams: draftMeta?.settings?.teams || null,
-    adp_available: adpAvailable
-  });
-});
-
-app.get("/api/detect", async (req, res) => {
-  const username = req.query.username;
-  if (!username) return res.status(400).json({ error: "username is required" });
-  try {
-    const result = await detectDraftsForUsername(username);
-    res.json(result);
-  } catch (err) {
-    res.status(404).json({ error: err.message });
-  }
-});
-
-app.post("/api/draft", async (req, res) => {
-  const draftId = (req.body || {}).draft_id;
-  if (!draftId) return res.status(400).json({ error: "draft_id is required" });
-  try {
-    const meta = await configureDraft(String(draftId).trim());
-    res.json({ ok: true, draft_id: currentDraftId, meta });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// --------------------
-// STARTUP
-// --------------------
+/*
 (async () => {
   // Warm the large player file only when a draft is active. This keeps the
   // setup screen responsive on slower machines and restricted networks.
@@ -1146,3 +1071,33 @@ app.post("/api/draft", async (req, res) => {
   pollDraft();
   pollDraftMeta();
 })();
+*/
+
+let engineStarted = false;
+
+export function startDraftEngine() {
+  if (engineStarted) return;
+  engineStarted = true;
+
+  setInterval(() => {
+    if (currentDraftId) loadPlayersCache();
+  }, PLAYERS_REFRESH_MS);
+
+  setInterval(() => {
+    if (!currentDraftId) return;
+    broadcast({
+      type: "SYNC",
+      draft_id: currentDraftId,
+      revision: stateRevision,
+      pick_count: allPicks.length,
+      server_time: Date.now()
+    });
+  }, CLIENT_SYNC_INTERVAL);
+
+  pollDraft();
+  pollDraftMeta();
+}
+
+export function forceDraftResync() {
+  requestDraftSnapshot();
+}
