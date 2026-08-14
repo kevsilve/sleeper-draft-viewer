@@ -1,0 +1,14 @@
+{
+  "name": "sleeper-draft-viewer",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-server.ps1"
+  },
+  "dependencies": {
+    "express": "^4.22.2",
+    "ws": "^8.21.0"
+  }
+}

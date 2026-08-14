@@ -1,0 +1,4097 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Draft Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060a14;
+    --panel: #0f1626;
+    --panel2: #141d33;
+    --accent: #ffcc33;
+    --accent-glow: rgba(255, 204, 51, 0.35);
+    --text: #f4f6fb;
+    --text-dim: #8b93a7;
+    --qb: #e74c3c;
+    --rb: #2ecc71;
+    --wr: #3498db;
+    --te: #e67e22;
+    --k: #9b59b6;
+    --def: #7f8c8d;
+    --rookie: #ff5fa2;
+    --veteran: #5ec8ff;
+    --reach: #ff6b5e;
+    --value: #35d488;
+    --font-display: "Anton", "Segoe UI", Arial, sans-serif;
+    --font-body: "Inter", "Segoe UI", Arial, sans-serif;
+    --pos-glow: var(--accent-glow);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: radial-gradient(ellipse at top, #101a30 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+
+  /* subtle broadcast-style vignette + grain over everything for depth */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 90;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%);
+  }
+
+  #app {
+    height: 100vh;
+    display: none;
+    flex-direction: column;
+  }
+  #app.ready { display: flex; }
+
+  /* ---------- SCROLLBAR HIDING (for TV casting) ---------- */
+  #gridview, #teamview, #setupscreen .draftlist {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #gridview::-webkit-scrollbar,
+  #teamview::-webkit-scrollbar,
+  #setupscreen .draftlist::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  /* ---------- TOP BAR ---------- */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 14px 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+
+  #onclock { display: flex; align-items: center; gap: 16px; flex: 1 1 auto; min-width: 0; }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #1c2740;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.12);
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  #onclock .label {
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  #onclock .team {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: 0 0 18px var(--accent-glow);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  #onclock .clock-owner { margin-top:2px;color:var(--text-dim);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  #onclock .namewrap { min-width: 0; }
+
+  #progress { font-size: 16px; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+  #progress .big { font-size: 22px; color: var(--text); font-weight: 700; }
+
+  #timerwrap { position: relative; width: 66px; height: 66px; flex-shrink: 0; }
+  #timerwrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+  #timerwrap circle { fill: none; stroke-width: 6; }
+  #timerwrap.warn #timertext { color: #e0a72e; }
+  #timerwrap.critical #timertext { color: #e74c3c; }
+  #timerwrap.critical { animation: timerPulse 1s ease-in-out infinite; }
+  @keyframes timerPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  /* Final-seconds urgency: a soft red pulse around the screen edge, visible
+     from across the room without being distracting up close. */
+  body.clock-critical::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 89;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 0 rgba(231,76,60,0);
+    animation: edgePulse 1s ease-in-out infinite;
+  }
+  @keyframes edgePulse {
+    0%, 100% { box-shadow: inset 0 0 60px 0 rgba(231,76,60,0.15); }
+    50%      { box-shadow: inset 0 0 110px 0 rgba(231,76,60,0.32); }
+  }
+  #timerbg { stroke: rgba(255,255,255,0.1); }
+  #timerfg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.2s linear, stroke 0.3s; }
+  #timertext { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+
+  /* ---------- MAIN AREA (spotlight / grid / teams) ---------- */
+  #main { flex: 1; position: relative; overflow: hidden; }
+
+  #spotlight {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s;
+    pointer-events: none;
+    contain: layout paint style;
+  }
+  #spotlight.active { opacity: 1; pointer-events: auto; }
+  #spotlight.dormant { visibility:hidden;content-visibility:hidden; }
+
+  #spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(from 0deg, transparent, var(--pos-glow, var(--accent-glow)), transparent 30%);
+    opacity: 0;
+    animation: none;
+  }
+  #spotlight.sweep::before { animation: sweepGlow 1.4s ease-out; }
+  @keyframes sweepGlow {
+    0%   { opacity: 0; transform: rotate(0deg); }
+    30%  { opacity: 0.45; }
+    100% { opacity: 0; transform: rotate(140deg); }
+  }
+
+  /* soft radial wash behind the whole scene, tinted by the drafted player's position */
+  #spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, var(--pos-glow, var(--accent-glow)) 0%, transparent 55%);
+    opacity: 0.5;
+    pointer-events: none;
+    transition: background 0.4s;
+  }
+
+  /* One composited logo field replaces the old 100+ tile/image DOM nodes. */
+  #logopattern {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    background-image: var(--team-logo-layer), var(--team-logo-layer);
+    background-repeat: repeat;
+    background-size: 116px 116px;
+    background-position: 0 0, 58px 58px;
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 15%, rgba(0,0,0,.82) 55%, transparent 100%);
+    mask-image: radial-gradient(ellipse at center, #000 15%, rgba(0,0,0,.82) 55%, transparent 100%);
+    contain: strict;
+    will-change: opacity;
+  }
+  #logopattern.reveal { opacity: 0.18; }
+  #logopattern::after { content:"";position:absolute;inset:-15%;background:repeating-linear-gradient(45deg,transparent 0 80px,rgba(255,255,255,.055) 81px 82px,transparent 83px 164px),repeating-linear-gradient(-45deg,transparent 0 80px,rgba(255,255,255,.04) 81px 82px,transparent 83px 164px);transform:rotate(.001deg); }
+
+  /* Never spend frames animating the reveal after it has left the screen. */
+  #spotlight:not(.active) .reveal,
+  #spotlight:not(.active) .orbit,
+  body.app-suspended #spotlight * { animation-play-state: paused !important; }
+
+  /* ---------- FULL-CANVAS BROADCAST REVEAL ---------- */
+  #pickribbon {
+    position:absolute; left:50%; top:clamp(18px,3.4vh,34px);
+    display:inline-flex; align-items:center; color:var(--pos-color,var(--accent));
+    background:rgba(4,8,16,.84); border:2px solid var(--pos-color,var(--accent));
+    font-family:var(--font-display); font-size:clamp(17px,1.4vw,23px); letter-spacing:2px;
+    padding:9px 22px; border-radius:999px; box-shadow:0 0 24px var(--pos-glow), inset 0 0 18px rgba(255,255,255,.025);
+    opacity:0; transform:translate(-50%,-18px) scale(.94); white-space:nowrap; z-index:8;
+  }
+  #pickribbon.reveal { animation:ribbonFromLeft .55s cubic-bezier(.2,1.35,.35,1) forwards; }
+  @keyframes ribbonFromLeft { 0%{opacity:0;transform:translate(-50%,-18px) scale(.92)} 70%{opacity:1;transform:translate(-50%,3px) scale(1.03)} 100%{opacity:1;transform:translateX(-50%)} }
+
+  #card {
+    position:absolute; inset:0; display:grid;
+    grid-template-columns:minmax(280px,29vw) minmax(430px,1fr) minmax(270px,25vw);
+    align-items:center; gap:clamp(12px,1.8vw,32px);
+    padding:clamp(54px,8vh,88px) clamp(34px,4.2vw,76px) clamp(36px,5vh,56px);
+    z-index:2; pointer-events:none;
+  }
+  #playerinfo { grid-column:1; align-self:center; justify-self:stretch; text-align:left; z-index:6; min-width:0; max-height:calc(100vh - 132px); padding-top:0; display:flex; flex-direction:column; justify-content:center; }
+  #herowrap { grid-column:2; justify-self:center; align-self:center; position:relative; z-index:4; }
+  #photostage { position:relative; display:grid; place-items:center; width:min(48vw,67vh,690px); height:min(48vw,67vh,690px); min-width:410px; min-height:410px; perspective:1200px; }
+
+  .name-first,.name-last { display:block; }
+  .name-first { color:#f6f7fb; font-size:.68em; line-height:.9; }
+  .name-last { color:var(--pos-color,var(--accent)); line-height:.88; text-shadow:0 0 28px var(--pos-glow); }
+  #playername { font-family:var(--font-display); font-size:clamp(55px,6.2vw,104px); letter-spacing:.3px; text-transform:uppercase; filter:drop-shadow(0 5px 18px rgba(0,0,0,.7)); opacity:0; transform:translateX(-28px); overflow-wrap:anywhere; }
+  #playername.reveal { animation:infoFromLeft .58s ease .42s forwards; }
+  #player-divider { width:100%; height:2px; margin:20px 0 18px; background:linear-gradient(90deg,var(--pos-color),var(--accent),transparent); box-shadow:0 0 14px var(--pos-glow); opacity:0; transform:scaleX(.2); transform-origin:left; }
+  #player-divider.reveal { animation:lineGrow .55s ease .62s forwards; }
+  @keyframes lineGrow { to{opacity:1;transform:scaleX(1)} }
+  #meta { display:flex; align-items:center; gap:13px; opacity:0; transform:translateX(-24px); }
+  #meta.reveal { animation:infoFromLeft .5s ease .62s forwards; }
+  @keyframes infoFromLeft { to{opacity:1;transform:translateX(0)} }
+  .badge { display:inline-block; padding:7px 16px; border-radius:10px; font-size:clamp(20px,1.8vw,29px); font-weight:900; letter-spacing:1px; color:#06090f; background:transparent!important; box-shadow:none; }
+  .badge.QB{color:var(--qb)}.badge.RB{color:var(--rb)}.badge.WR{color:var(--wr)}.badge.TE{color:var(--te)}.badge.K{color:var(--k)}.badge.DEF{color:var(--def)}
+  #nfl-logo-small { width:64px; height:48px; object-fit:contain; filter:drop-shadow(0 4px 10px rgba(0,0,0,.7)); }
+  #nflteam { font-size:clamp(22px,2vw,31px); color:var(--text); font-weight:800; letter-spacing:1px; }
+  #playercards { display:flex; gap:12px; margin-top:24px; flex-wrap:wrap; }
+  .player-stat-card { min-width:132px; padding:14px 16px; border-radius:12px; background:linear-gradient(145deg,rgba(12,18,31,.92),rgba(4,8,15,.88)); border:1px solid var(--pos-color,var(--accent)); box-shadow:0 0 20px rgba(0,0,0,.25),inset 0 0 20px rgba(255,255,255,.02); opacity:0; transform:translateY(12px); }
+  .player-stat-card.reveal { animation:statUp .45s ease .78s forwards; }
+  @keyframes statUp { to{opacity:1;transform:none} }
+  .stat-label { color:var(--text-dim); font-size:11px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; }
+  .stat-value { margin-top:4px; color:var(--text); font-size:21px; font-weight:900; }
+  .stat-value.value { color:var(--value); }.stat-value.reach { color:var(--reach); }
+  #player-dossier { display:flex;align-items:stretch;gap:7px;max-width:100%;margin-top:16px;overflow:hidden; }
+  .dossier-fact { min-width:0;flex:1 1 0;padding:9px 10px;border-radius:9px;background:rgba(4,8,16,.72);border:1px solid rgba(255,255,255,.11);opacity:0;transform:translateY(9px); }
+  .dossier-fact.reveal { animation:statUp .4s ease .86s forwards; }
+  .dossier-label { color:var(--text-dim);font-size:8px;font-weight:950;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .dossier-value { margin-top:3px;color:var(--text);font-size:13px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .dossier-fact.market { border-color:rgba(255,204,51,.32); }
+  .dossier-fact.market .dossier-value { color:var(--accent); }
+  .dossier-fact.alert { border-color:rgba(255,107,94,.42); }
+  .dossier-fact.alert .dossier-value { color:var(--reach); }
+  .rookie-card,
+  .veteran-card {
+    display:flex;
+    align-items:center;
+    gap:14px;
+    min-width: 170px;
+    border-color: var(--team-secondary);
+    background:
+      radial-gradient(circle at 18% 50%, var(--team-soft), transparent 48%),
+      linear-gradient(145deg,rgba(12,18,31,.96),rgba(4,8,15,.9));
+  }
+  .rookie-mark,
+  .veteran-mark {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    color: var(--text);
+    background: linear-gradient(145deg, var(--team-primary), var(--team-secondary));
+    font-weight: 900;
+    font-size: 22px;
+    border: 1px solid rgba(255,255,255,.5);
+    clip-path: polygon(50% 0, 92% 23%, 92% 76%, 50% 100%, 8% 76%, 8% 23%);
+    box-shadow: 0 0 18px var(--team-glow, var(--accent-glow));
+  }
+  .veteran-card {
+    border-color: var(--veteran);
+    background:
+      radial-gradient(circle at 18% 50%, rgba(94,200,255,.22), transparent 48%),
+      linear-gradient(145deg,rgba(12,18,31,.96),rgba(4,8,15,.9));
+  }
+  .veteran-mark { background:linear-gradient(145deg,#17456b,var(--veteran));box-shadow:0 0 18px rgba(94,200,255,.34); }
+  .rookie-card .stat-value,
+  .veteran-card .stat-value { text-transform: uppercase; letter-spacing: 1.2px; }
+  #college-line {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width: fit-content;
+    max-width: 100%;
+    margin-top:18px;
+    padding: 10px 14px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:850;
+    letter-spacing:.8px;
+    opacity:0;
+    transform:translateX(-18px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-left: 4px solid var(--team-secondary);
+    border-radius: 10px;
+    background: rgba(255,255,255,.055);
+    box-shadow: 0 10px 28px rgba(0,0,0,.22);
+  }
+  #college-line.reveal { animation:infoFromLeft .45s ease .92s forwards; }
+  .college-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: var(--team-secondary-ink, #06090f);
+    background: var(--team-secondary);
+    font-weight: 950;
+  }
+  .college-label {
+    display:block;
+    color: var(--team-secondary-text, var(--team-secondary));
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+  }
+  .college-name {
+    display:block;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+  }
+  #synergy-callout {
+    margin-top: 16px;
+    max-width: 360px;
+    border: 1px solid var(--team-secondary);
+    border-left: 6px solid var(--team-primary);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.055), rgba(0,0,0,0.22));
+    box-shadow: 0 0 22px var(--team-glow);
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  #synergy-callout.reveal { animation:infoFromLeft .45s ease 1.02s forwards; }
+  .syn-label {
+    color: var(--team-secondary-text, var(--team-secondary));
+    font-size: 13px;
+    font-weight: 950;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+  }
+  .syn-main {
+    color: var(--text);
+    font-weight: 900;
+    font-size: clamp(18px,1.4vw,24px);
+    margin-top: 4px;
+    line-height: 1.1;
+  }
+  .syn-sub {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 3px;
+    line-height: 1.35;
+  }
+
+  .orbit { position:absolute; border-radius:50%; pointer-events:none; opacity:0; will-change:transform; }
+  #orbit1 { inset:1%; border:2px solid rgba(255,255,255,.16); border-top:3px solid var(--pos-color); border-right-color:transparent; filter:drop-shadow(0 0 14px var(--pos-glow)); }
+  #orbit2 { inset:-5%; border:2px solid transparent; border-top-color:var(--accent); border-bottom-color:var(--pos-color); box-shadow:0 0 22px var(--accent-glow); }
+  #orbit3 { inset:6%; border:1px solid rgba(255,255,255,.25); border-left-color:transparent; border-bottom:3px solid var(--pos-color); }
+  .orbit::before,.orbit::after { content:""; position:absolute; width:9px; height:9px; border-radius:50%; background:#fff; box-shadow:0 0 8px #fff,0 0 20px var(--pos-color); }
+  .orbit::before { top:-5px; left:50%; }.orbit::after { bottom:8%; right:7%; }
+  .orbit.reveal { opacity:1; }
+  #orbit1.reveal { animation:orbitCW 8.4s linear infinite,orbitIn .7s ease both; }
+  #orbit2.reveal { animation:orbitCCW 12.5s linear infinite,orbitIn .85s ease both; }
+  #orbit3.reveal { animation:orbitCW 6.1s linear infinite,orbitIn .95s ease both; }
+  @keyframes orbitCW { to{transform:rotate(360deg)} } @keyframes orbitCCW { to{transform:rotate(-360deg)} }
+  @keyframes orbitIn { from{opacity:0;scale:.82} to{opacity:1;scale:1} }
+  #orbitdots { position:absolute; inset:-1.5%; border-radius:50%; opacity:0; background:radial-gradient(circle at 50% 0%,#fff 0 4px,var(--accent) 5px 8px,transparent 9px),radial-gradient(circle at 100% 50%,#fff 0 3px,var(--pos-color) 4px 7px,transparent 8px),radial-gradient(circle at 18% 88%,#fff 0 2px,var(--pos-color) 3px 6px,transparent 7px); filter:drop-shadow(0 0 12px var(--accent)); }
+  #orbitdots.reveal { animation:orbitCW 6.7s linear infinite,dotsIn .8s ease forwards; } @keyframes dotsIn{to{opacity:.95}}
+  #beams { position:absolute; inset:-14%; border-radius:50%; opacity:0; background:conic-gradient(from 25deg,transparent 0 18deg,var(--pos-glow) 22deg,transparent 31deg 98deg,var(--accent-glow) 105deg,transparent 116deg 205deg,var(--pos-glow) 211deg,transparent 224deg 318deg,var(--accent-glow) 324deg,transparent 336deg); will-change:transform,opacity;contain:paint; }
+  #beams.reveal { animation:beamBreathe 4.6s ease-in-out infinite,orbitCCW 20s linear infinite; } @keyframes beamBreathe{0%,100%{opacity:.25;scale:.98}50%{opacity:.65;scale:1.04}}
+  #pulsering { position:absolute; inset:8%; border-radius:50%; border:2px solid var(--pos-color); opacity:0; z-index:1; }
+  #pulsering.reveal { animation:ringPulse 2.2s ease-out .55s infinite; } @keyframes ringPulse{0%{opacity:.65;transform:scale(.96)}100%{opacity:0;transform:scale(1.22)}}
+  #headshot { position:relative; z-index:3; width:80%; height:80%; border-radius:50%; background:#111a2e; overflow:hidden; border:5px solid var(--pos-color); box-shadow:0 0 0 8px rgba(255,255,255,.055),0 0 90px var(--pos-glow),inset 0 -40px 60px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; font-size:90px; opacity:0; transform:perspective(1200px) rotateY(-95deg) scale(.65); }
+  #headshot img { width:100%;height:100%;object-fit:cover; }
+  #headshot img.def-logo { width:72%; height:72%; object-fit:contain; filter:drop-shadow(0 18px 32px rgba(0,0,0,.55)); }
+  #headshot.reveal { animation:headshotIn .82s cubic-bezier(.2,1.25,.3,1) forwards; }
+  @keyframes headshotIn{0%{opacity:0;transform:perspective(1200px) rotateY(-95deg) scale(.65)}62%{opacity:1;transform:perspective(1200px) rotateY(8deg) scale(1.04)}100%{opacity:1;transform:perspective(1200px) rotateY(0) scale(1)}}
+  #headshot::after { content:"";position:absolute;inset:0;background:linear-gradient(112deg,transparent 38%,rgba(255,255,255,.72) 49%,transparent 60%);transform:translateX(-150%);opacity:0; }
+  #headshot.reveal::after { animation:shineSweep .95s ease .68s forwards; } @keyframes shineSweep{0%{transform:translateX(-150%);opacity:0}18%{opacity:.9}100%{transform:translateX(150%);opacity:0}}
+  #draftedby { position:absolute; right:clamp(32px,4vw,72px); top:50%; width:clamp(270px,22vw,365px); min-height:330px; transform:translateY(-50%) translateX(30px); padding:26px; border-radius:20px; background:linear-gradient(145deg,rgba(8,14,25,.98),rgba(3,7,14,.97)); border:1px solid rgba(255,255,255,.18); border-top-color:var(--pos-color); box-shadow:0 24px 70px rgba(0,0,0,.5),0 0 28px rgba(0,0,0,.3),inset 0 1px rgba(255,255,255,.04); color:var(--text-dim); opacity:0; z-index:7; contain:layout paint style; }
+  #draftedby.reveal { animation:panelFromRight .58s ease .7s forwards; } @keyframes panelFromRight{to{opacity:1;transform:translateY(-50%) translateX(0)}}
+  .panel-title { color:var(--pos-color); font-size:14px; font-weight:900; letter-spacing:2.5px; margin-bottom:16px; }
+  #draftedby .draftrow { display:flex; align-items:center; gap:15px; }
+  #draftedby .avatar { width:58px;height:58px;font-size:15px;border-color:var(--pos-color); }
+  #draftedby b { display:block;color:var(--text);font-size:clamp(22px,2vw,30px);line-height:1.05; }
+  #draftedby .uname { color:var(--pos-color);font-size:13px;margin-top:5px; }
+  .panelrule { height:1px;background:linear-gradient(90deg,var(--pos-color),transparent);margin:22px 0;opacity:.75; }
+  .upnext-title { color:var(--accent);font-size:12px;font-weight:900;letter-spacing:1.8px;margin-bottom:10px; }
+  .upnext-row { display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;padding:7px 0;font-size:14px; }
+  .upnext-slot { width:31px;height:31px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--accent);font-size:10px;font-weight:900;color:var(--text); }
+  .upnext-name { color:var(--text);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .upnext-pick { color:var(--text-dim);font-size:12px; }
+  @media(max-width:1180px){
+    #card{grid-template-columns:minmax(230px,27vw) minmax(400px,1fr) minmax(235px,24vw);padding-left:24px;padding-right:24px;gap:8px}
+    #photostage{width:min(46vw,64vh,590px);height:min(46vw,64vh,590px);min-width:360px;min-height:360px}
+    #draftedby{right:22px;width:250px;padding:20px}
+    #playername{font-size:clamp(48px,5.6vw,76px)}
+  }
+  @media(max-height:780px){
+    #card{padding-top:22px;padding-bottom:16px}
+    #photostage{width:min(46vw,62vh,500px);height:min(46vw,62vh,500px);min-width:350px;min-height:350px}
+    #playerinfo{max-height:calc(100vh - 92px)}
+    #pickribbon{top:14px}
+    #draftedby{min-height:280px;padding:18px}
+  }
+
+  @media(max-height:700px) and (min-width:761px){
+    #playername{font-size:clamp(42px,5.2vw,72px)}
+    #player-divider{margin:12px 0 11px}
+    #playercards{margin-top:12px}
+    .player-stat-card{padding:9px 11px;min-width:145px}
+    .rookie-mark,.veteran-mark{width:38px;height:38px;font-size:17px}
+    #college-line{margin-top:10px;padding:7px 10px}
+    #synergy-callout{margin-top:10px;padding:9px 11px}
+    .syn-sub{display:none}
+    #player-dossier{margin-top:10px}
+  }
+  /* ---------- DRAFT ORDER REVEAL ---------- */
+  #orderreveal { text-align: center; max-width: 1000px; }
+  #orderreveal .orlabel {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 34px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 24px var(--accent-glow);
+    margin-bottom: 26px;
+    opacity: 0;
+    animation: lineIn 0.5s ease forwards;
+  }
+  #orderreveal .orlist { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  #orderreveal .orchip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 999px;
+    padding: 8px 20px 8px 8px;
+    opacity: 0;
+    transform: translateY(14px) scale(0.9);
+    animation: chipIn 0.45s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  #orderreveal .orpick {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255,204,51,0.15);
+    color: var(--accent);
+    font-weight: 900;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #orderreveal .avatar { width: 32px; height: 32px; font-size: 12px; }
+  #orderreveal .orname { font-weight: 700; font-size: 16px; }
+  @keyframes chipIn {
+    0%   { opacity: 0; transform: translateY(14px) scale(0.9); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  #skiphint {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity 0.4s;
+    background: rgba(0,0,0,0.35);
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    z-index: 5;
+    white-space: nowrap;
+  }
+  #skiphint.show { opacity: 1; }
+  body.kiosk #skiphint { opacity: 0; pointer-events: none; }
+  #skiphint kbd {
+    background: rgba(255,255,255,0.12);
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-family: inherit;
+    font-weight: 700;
+  }
+
+  @media (max-height: 820px) {
+    #pickribbon { top: 26px; font-size: 18px; padding: 8px 24px; }
+    #card { top: 46%; }
+    #headshot { width: clamp(220px, 32vh, 270px); height: clamp(220px, 32vh, 270px); }
+    #playername { font-size: clamp(40px, 6.8vh, 58px); }
+    #meta { margin-top: 7px; }
+    .badge { padding: 7px 18px; font-size: 18px; }
+    #nflteam { font-size: 19px; }
+    #draftedby { bottom: 36px; padding: 8px 20px; }
+    #skiphint { bottom: 8px; }
+  }
+
+  /* ---------- GRID VIEW ---------- */
+  #gridview {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    overflow: auto;
+    padding: 16px 24px;
+    contain: layout paint style;
+  }
+  #gridview.active { opacity: 1; pointer-events: auto; }
+
+  #grid,
+  .recap-final-grid { display: grid; gap: 4px; min-width: max-content; }
+
+  .gcell {
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-width: 130px;
+    min-height: 56px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .gcell.header {
+    background: transparent;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 8px 6px;
+  }
+  .gcell.header .headertext { display: flex; flex-direction: column; overflow: hidden; }
+  .gcell.header .hname { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gcell.header .hteam { font-size: 10px; color: var(--text-dim); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .gcell.roundlabel {
+    background: transparent;
+    color: var(--text-dim);
+    font-weight: 700;
+    justify-content: center;
+    align-items: center;
+    min-width: 50px;
+  }
+
+  .gcell.filled {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(135deg, var(--panel), var(--panel2));
+    position: relative;
+    transition: transform 0.12s;
+  }
+  .gcell.filled:hover { transform: translateY(-1px); }
+  .gcell .gplayer { font-weight: 700; font-size: 14px; }
+  .gcell .gpos {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 2px;
+    color: white;
+    width: fit-content;
+  }
+  .gcell .gflags { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+  .gtag {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+  }
+  .gtag.rookie { background: var(--rookie); color: #06090f; }
+  .gtag.veteran { background:rgba(94,200,255,.16);border:1px solid rgba(94,200,255,.45);color:var(--veteran); }
+
+  .gcell.current { outline: 2px solid var(--accent); }
+
+  /* ---------- TEAM VIEW ---------- */
+  #teamview {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    overflow: auto;
+    padding: 20px 24px;
+    contain: layout paint style;
+  }
+  #teamview.active { opacity: 1; pointer-events: auto; }
+  #teamgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .teamcard {
+    background: linear-gradient(160deg, rgba(255,255,255,0.035), var(--panel) 45%);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .teamcard:hover { border-color: rgba(255,204,51,0.35); transform: translateY(-2px); }
+  .teamcard .thead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .teamcard .thead .tname { font-weight: 800; font-size: 15px; }
+  .teamcard .thead .tuser { font-size: 11px; color: var(--text-dim); }
+  .poslist { display: flex; flex-direction: column; gap: 6px; }
+  .posrow { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+  .posrow .poslabel {
+    min-width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+    font-weight: 800;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: #06090f;
+    background: rgba(255,255,255,0.12);
+  }
+  .posrow .poslabel.QB { background: var(--qb); color: white; }
+  .posrow .poslabel.RB { background: var(--rb); }
+  .posrow .poslabel.WR { background: var(--wr); color: white; }
+  .posrow .poslabel.TE { background: var(--te); }
+  .posrow .poslabel.K  { background: var(--k); color: white; }
+  .posrow .poslabel.DEF{ background: var(--def); color: white; }
+  .posrow .posplayers { color: var(--text); line-height: 1.5; }
+  .posrow .posplayers .ply { color: var(--text-dim); }
+  .posrow .posplayers .ply b { color: var(--text); font-weight: 600; }
+  .posrow .posplayers .ply .rk { color: var(--rookie); font-weight: 800; }
+  .posrow .posplayers .ply .vt { color: var(--veteran); font-weight: 800; }
+
+  /* ---------- WAITING STATE ---------- */
+  #waiting {
+    font-size: 34px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  /* ---------- TICKER ---------- */
+  #ticker {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    padding: 12px 32px;
+    background: linear-gradient(0deg, var(--panel2), var(--panel));
+    border-top: 2px solid var(--accent);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.25);
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  #ticker .item { color: var(--text-dim); flex-shrink: 0; }
+  #ticker .item b { color: var(--text); }
+  #ticker .item .p { color: var(--accent); font-weight: 700; }
+  #ticker .item .rk { color: var(--rookie); font-weight: 800; margin-left: 4px; }
+  #ticker .item .vt { color:var(--veteran);font-weight:800;margin-left:4px; }
+  #ticker .item .syn { color: var(--accent); font-weight: 900; text-transform: uppercase; font-size: 0.88em; letter-spacing: 0.7px; }
+
+  /* ---------- CONTROLS ---------- */
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    transition: opacity 0.3s;
+  }
+  #controls.hidden { opacity: 0; pointer-events: none; }
+  #controls button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    font-size: 15px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 12px;
+    border-radius: 19px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  #controls button:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.2); }
+  #controls button:active { transform: scale(0.94); }
+  #controls button.active { background: var(--accent); color: #06090f; font-weight: 800; border-color: var(--accent); }
+
+  /* ---------- TRADE BANNER ---------- */
+  #tradebanner {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-30px) scale(0.92);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: linear-gradient(160deg, rgba(28,39,64,0.96), rgba(16,23,40,0.96));
+    border: 1px solid rgba(255,204,51,0.35);
+    border-radius: 18px;
+    padding: 18px 34px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,204,51,0.12);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.35s, transform 0.35s;
+    z-index: 70;
+    pointer-events: none;
+  }
+  #tradebanner.show {
+    opacity: 1;
+    animation: tradeBounce 0.5s cubic-bezier(.2,1.5,.35,1) forwards;
+  }
+  @keyframes tradeBounce {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+    60%  { opacity: 1; transform: translateX(-50%) translateY(4px) scale(1.03); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+  #tradebanner .tradeicon {
+    font-size: 34px;
+    animation: tradeSpin 2.2s ease-in-out infinite;
+  }
+  @keyframes tradeSpin {
+    0%, 100% { transform: rotate(-8deg); }
+    50%      { transform: rotate(8deg); }
+  }
+  #tradebanner .tradelabel {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  #tradebanner .trademain { font-size: 24px; margin-top: 2px; }
+  #tradebanner .trademain b { color: var(--text); }
+  #tradebanner .tradearrow { color: var(--accent); font-weight: 800; margin: 0 4px; }
+  #tradebanner .tradesub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ---------- RECONNECT BANNER ---------- */
+  #reconnectbanner {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-14px);
+    background: rgba(224,167,46,0.16);
+    border: 1px solid rgba(224,167,46,0.5);
+    color: #e0a72e;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    padding: 9px 22px;
+    border-radius: 999px;
+    z-index: 95;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  #reconnectbanner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #reconnectbanner::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e0a72e;
+    margin-right: 8px;
+    animation: pulseDot 1s infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ---------- RECAP / COMPLETE ---------- */
+  #complete {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(255,204,51,0.12), transparent 34%),
+      rgba(6,10,20,0.98);
+    display: none;
+    flex-direction: column;
+    z-index: 50;
+    padding: 22px clamp(14px, 3vw, 34px) 34px;
+    overflow: auto;
+  }
+  #complete.show { display: flex; }
+  .recaphead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 18px;
+    align-items: center;
+    width: 100%;
+    padding: 10px 0 16px;
+    background: linear-gradient(180deg, rgba(6,10,20,0.98), rgba(6,10,20,0.82) 78%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .recapintro { min-width: 0; }
+  #complete h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 2px;
+    font-size: clamp(42px, 6vw, 72px);
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent-glow);
+    margin: 0;
+    line-height: 0.95;
+  }
+  .recapsub { color: var(--text-dim); font-size: 15px; margin-top: 8px; }
+  .recaptools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .recaptools button {
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.075);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 10px 15px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .recaptools button.active {
+    background: var(--accent);
+    color: #06090f;
+    border-color: var(--accent);
+  }
+
+  #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+
+  /* ---------- RECAP AWARDS ---------- */
+  #recapawards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin: 4px 0 18px;
+  }
+  .awardcard {
+    background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .awardcard .alabel {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .awardcard .aplayer { font-size: 24px; font-weight: 800; margin-top: 8px; }
+  .awardcard .ameta { font-size: 14px; color: var(--text-dim); margin-top: 4px; }
+  .awardcard.grade { border-color: rgba(255,204,51,0.35); }
+  .awardcard.grade .aplayer { color: var(--accent); }
+  #recapgrid {
+    width: 100%;
+    min-width: 0;
+  }
+  .recapteams {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 14px;
+    width: 100%;
+    padding-bottom: 20px;
+  }
+  .recapteam {
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent);
+    border-radius: 10px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(15,22,38,0.92));
+    box-shadow: 0 20px 45px rgba(0,0,0,0.28);
+    overflow: hidden;
+  }
+  .recapteam-head {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .gradebadge {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255,204,51,0.14);
+    border: 1px solid rgba(255,204,51,0.45);
+    color: var(--accent);
+    font-size: 22px;
+    font-weight: 900;
+  }
+  .recapteam-name {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .recapteam-meta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .scorepill {
+    justify-self: end;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .scorepill.value { color: var(--value); background: rgba(53,212,136,0.14); }
+  .scorepill.reach { color: var(--reach); background: rgba(255,107,94,0.14); }
+  .recapsummary {
+    padding: 12px 14px 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .recapplayer-list {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px 14px;
+    gap: 7px;
+  }
+  .recapplayer {
+    display: grid;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .recapplayer:first-child { border-top: none; }
+  .recappick {
+    color: var(--accent);
+    font-weight: 900;
+    font-size: 12px;
+    min-width: 38px;
+  }
+  .recappname {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-weight: 800;
+  }
+  .recappmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .adppill {
+    font-size: 12px;
+    font-weight: 900;
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.07);
+    white-space: nowrap;
+  }
+  .adppill.value { color: var(--value); background: rgba(53,212,136,0.14); }
+  .adppill.reach { color: var(--reach); background: rgba(255,107,94,0.14); }
+  .recapboard {
+    overflow: auto;
+    width: 100%;
+    padding-bottom: 18px;
+  }
+  .recapboard .recap-final-grid {
+    min-width: max-content;
+  }
+  .recaplineups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 14px;
+    width: 100%;
+    padding-bottom: 20px;
+  }
+  .lineupcard {
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(15,22,38,0.92));
+    overflow: hidden;
+  }
+  .lineuphead {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .lineupname {
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lineupmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+  .lineupsection {
+    padding: 12px 14px 4px;
+  }
+  .lineuplabel {
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 1.4px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .lineupslot {
+    display: grid;
+    grid-template-columns: 42px minmax(0,1fr) auto;
+    gap: 9px;
+    align-items: center;
+    padding: 7px 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .lineupslot:first-of-type { border-top: none; }
+  .slotlabel {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .slotplayer {
+    color: var(--text);
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .slotmeta {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .lineupnotes {
+    padding: 10px 14px 14px;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  body.kiosk #controls { display: none; }
+  body.kiosk { cursor: none; }
+  body.low-power #beams,
+  body.low-power #orbitdots,
+  body.low-power #spotlight::before {
+    display: none;
+  }
+  body.low-power #logopattern.reveal {
+    opacity: 0.14;
+  }
+  body.low-power #headshot,
+  body.low-power #draftedby {
+    box-shadow: 0 14px 36px rgba(0,0,0,0.4);
+  }
+  body.low-power .orbit.reveal {
+    animation: none;
+    opacity: 0.85;
+  }
+  body.low-power #pulsering.reveal {
+    animation: none;
+    opacity: 0;
+  }
+  #spotlight.catch-up #beams,
+  #spotlight.catch-up #orbitdots,
+  #spotlight.catch-up #pulsering,
+  #spotlight.catch-up::before {
+    display: none;
+  }
+  #spotlight.catch-up #logopattern.reveal {
+    opacity: 0.1;
+  }
+  #spotlight.catch-up .orbit.reveal {
+    animation: none;
+    opacity: 0.65;
+  }
+
+  /* ---------- SETUP SCREEN ---------- */
+  #setupscreen {
+    position: fixed;
+    inset: 0;
+    height: 100vh;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+    z-index: 100;
+    overflow-y: auto;
+  }
+  #setupscreen.show { display: flex; }
+  .setupbox {
+    width: 100%;
+    max-width: 600px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), var(--panel) 40%);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 18px;
+    padding: 34px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  }
+  .setupbox h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: 1px;
+    font-size: 30px;
+    margin: 0 0 6px;
+    color: var(--accent);
+    text-shadow: 0 0 20px var(--accent-glow);
+  }
+  .setupbox p.sub { color: var(--text-dim); margin: 0 0 26px; font-size: 14px; }
+  .setuprow { display: flex; gap: 8px; margin-bottom: 10px; }
+  .setuprow input {
+    flex: 1;
+    background: var(--panel2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  .setuprow input:focus { outline: 2px solid var(--accent); }
+  .setuprow button, .setupbox .primarybtn {
+    background: var(--accent);
+    color: #06090f;
+    border: none;
+    font-weight: 800;
+    padding: 12px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+    transition: filter 0.15s, transform 0.1s;
+  }
+  .setuprow button:hover:not(:disabled) { filter: brightness(1.08); }
+  .setuprow button:active:not(:disabled) { transform: scale(0.97); }
+  .setuprow button:disabled { opacity: 0.5; cursor: default; }
+  .setupdivider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-dim);
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin: 24px 0;
+  }
+  .setupdivider::before, .setupdivider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+  }
+  .draftlist { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .draftsection {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 10px 0 -2px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .draftsection:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .draftcard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel2);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .draftcard:hover { border-color: var(--accent); }
+  .draftcard .dname { font-weight: 700; font-size: 14px; }
+  .draftcard .dmeta { font-size: 11px; color: var(--text-dim); margin-top: 2px; font-family: monospace; }
+  .dkind {
+    display: inline-block;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .dkind.league { background: rgba(255,204,51,0.18); color: var(--accent); }
+  .dkind.practice { background: rgba(53,212,136,0.18); color: var(--value); }
+  .dkind.mock { background: rgba(255,255,255,0.1); color: var(--text-dim); }
+  .draftcard .dstatus {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+  }
+  .dstatus.drafting, .dstatus.paused { background: rgba(53,212,136,0.18); color: var(--value); }
+  .dstatus.pre_draft { background: rgba(255,204,51,0.18); color: var(--accent); }
+  .dstatus.complete { background: rgba(255,255,255,0.1); color: var(--text-dim); }
+  .setuperr { color: var(--reach); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .setupmsg { color: var(--text-dim); font-size: 13px; margin-top: 10px; }
+
+  /* ---------- FINAL BROADCAST PASS / RESPONSIVE GUARDRAILS ---------- */
+  #topbar {
+    min-height: 92px;
+    padding: clamp(10px, 1.4vw, 18px) clamp(14px, 2vw, 28px);
+  }
+  #onclock { min-width: 210px; }
+  #progress {
+    min-width: 150px;
+    text-align: center;
+  }
+  #controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: min(45vw, 620px);
+  }
+  #controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #playername,
+  #draftedby b,
+  .upnext-name,
+  .teamcard .thead,
+  .gcell .gplayer,
+  #ticker .item {
+    overflow-wrap: anywhere;
+  }
+  #playerinfo,
+  #draftedby,
+  #herowrap,
+  #photostage {
+    min-width: 0;
+  }
+  #draftedby .draftrow > div:last-child,
+  .owner-block {
+    min-width: 0;
+  }
+  #draftedby b,
+  #draftedby .uname,
+  .owner-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .owner-kicker {
+    color: var(--pos-color);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+  }
+  .owner-name {
+    margin-top: 5px;
+    color: var(--text);
+    font-size: clamp(17px, 1.5vw, 22px);
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .owner-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    min-width: 0;
+  }
+  #draftedby .owner-row .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 13px;
+  }
+  .owner-row > div:last-child {
+    min-width: 0;
+  }
+  .owner-team {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .upnext-slot {
+    color: var(--text);
+    border-color: var(--pos-color);
+  }
+  .gcell.header .howner {
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .teamcard .thead > div:nth-child(2) {
+    min-width: 0;
+  }
+  .teamcard .thead .tname,
+  .teamcard .thead .towner,
+  .teamcard .thead .tuser {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .teamcard .thead .towner {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 650;
+    margin-top: 2px;
+  }
+  #ticker {
+    min-height: 58px;
+    border-top-color: var(--pos-color, var(--accent));
+  }
+  #ticker::before {
+    content: "Recent picks";
+    color: #5ec8ff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex: 0 0 auto;
+  }
+  #spotlight {
+    --team-primary: var(--accent);
+    --team-secondary: #5ec8ff;
+    --team-primary-text: var(--accent);
+    --team-secondary-text: #5ec8ff;
+    --team-secondary-ink: #06090f;
+    --team-glow: var(--accent-glow);
+    --team-soft: rgba(94, 200, 255, 0.22);
+  }
+  #spotlight::before {
+    background: conic-gradient(from 0deg, transparent, var(--team-glow), transparent 30%);
+  }
+  #spotlight::after {
+    background:
+      radial-gradient(circle at 50% 50%, var(--team-glow) 0%, transparent 52%),
+      radial-gradient(circle at 36% 58%, var(--team-soft) 0%, transparent 42%);
+  }
+  #pickribbon {
+    color: var(--team-secondary-text);
+    border-color: var(--team-secondary);
+    box-shadow: 0 0 24px var(--team-glow), inset 0 0 18px rgba(255,255,255,.025);
+  }
+  .name-last {
+    color: var(--team-primary-text);
+    text-shadow: 0 0 28px var(--team-glow);
+  }
+  #player-divider {
+    background: linear-gradient(90deg,var(--team-primary),var(--team-secondary),transparent);
+    box-shadow: 0 0 14px var(--team-glow);
+  }
+  .player-stat-card {
+    border-color: var(--team-secondary);
+  }
+  #orbit1 { border-top-color: var(--team-primary); filter: drop-shadow(0 0 14px var(--team-glow)); }
+  #orbit2 { border-top-color: var(--team-secondary); border-bottom-color: var(--team-primary); box-shadow: 0 0 22px var(--team-glow); }
+  #orbit3 { border-bottom-color: var(--team-primary); }
+  .orbit::before,.orbit::after { box-shadow:0 0 8px #fff,0 0 20px var(--team-primary); }
+  #beams {
+    background: conic-gradient(from 25deg,transparent 0 18deg,var(--team-glow) 22deg,transparent 31deg 98deg,var(--team-soft) 105deg,transparent 116deg 205deg,var(--team-glow) 211deg,transparent 224deg 318deg,var(--team-soft) 324deg,transparent 336deg);
+  }
+  #pulsering {
+    border-color: var(--team-primary);
+  }
+  #headshot {
+    border-color: var(--team-primary);
+    box-shadow: 0 0 0 8px rgba(255,255,255,.055),0 0 90px var(--team-glow),inset 0 -40px 60px rgba(0,0,0,.25);
+  }
+  #draftedby {
+    border-top-color: var(--team-secondary);
+  }
+  .panel-title,
+  #draftedby .uname,
+  .owner-kicker {
+    color: var(--team-secondary-text);
+  }
+  #draftedby .avatar,
+  #draftedby .owner-row .avatar {
+    border-color: var(--team-secondary);
+  }
+  .panelrule {
+    background: linear-gradient(90deg,var(--team-secondary),transparent);
+  }
+  #ticker {
+    border-top-color: var(--team-secondary);
+  }
+
+  /* ---------- PICK SIGNAL / CHARACTER PASS ---------- */
+  #timercluster {
+    position: relative;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    padding: 17px 13px 7px;
+    border-radius: 18px;
+    background: radial-gradient(circle at 50% 42%, rgba(255,204,51,.13), rgba(255,255,255,.025) 68%);
+    border: 1px solid rgba(255,204,51,.24);
+    box-shadow: inset 0 1px rgba(255,255,255,.06), 0 8px 28px rgba(0,0,0,.22);
+  }
+  .timer-caption {
+    position: absolute;
+    top: 5px;
+    color: var(--accent);
+    font-size: 8px;
+    font-weight: 950;
+    letter-spacing: 1.7px;
+    text-transform: uppercase;
+  }
+  #timerwrap { width: 78px; height: 78px; }
+  #timerwrap circle { stroke-width: 7; }
+  #timertext {
+    font-family: var(--font-display);
+    font-size: 29px;
+    letter-spacing: .5px;
+    text-shadow: 0 0 18px currentColor;
+  }
+  #onclock.clock-change .avatar { animation: clockAvatarPop .52s cubic-bezier(.2,1.45,.35,1); }
+  #onclock.clock-change .team { animation: clockNameStrike .6s ease; }
+  @keyframes clockAvatarPop { 0%{transform:scale(.72);opacity:.35} 65%{transform:scale(1.12)} 100%{transform:none;opacity:1} }
+  @keyframes clockNameStrike { 0%{opacity:.25;transform:translateX(-12px)} 100%{opacity:1;transform:none} }
+
+  #pickcall {
+    position: relative;
+    grid-column: 1 / -1;
+    width: min(1040px, 88vw);
+    justify-self: center;
+    text-align: center;
+    z-index: 9;
+    isolation: isolate;
+  }
+  #pickcall::before {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    width: min(78vw, 920px); height: min(78vw, 920px);
+    transform: translate(-50%,-50%) scale(.34);
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--team-glow) 0 18%, transparent 64%);
+    border: 2px solid var(--team-secondary);
+    opacity: 0;
+    z-index: -1;
+    animation: pickSignalWave .9s cubic-bezier(.16,.78,.25,1) forwards;
+  }
+  .pickcall-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--team-secondary-text);
+    font-size: clamp(13px,1.2vw,18px);
+    font-weight: 950;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    opacity: 0;
+    animation: pickCallUp .35s ease .06s forwards;
+  }
+  .pickcall-eyebrow::before,.pickcall-eyebrow::after { content:""; width:clamp(30px,5vw,80px); height:1px; background:var(--team-secondary); box-shadow:0 0 12px var(--team-glow); }
+  .pickcall-title {
+    margin-top: 10px;
+    font-family: var(--font-display);
+    color: var(--text);
+    font-size: clamp(68px,10vw,162px);
+    line-height: .9;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-shadow: 0 8px 34px rgba(0,0,0,.58), 0 0 38px var(--team-glow);
+    opacity: 0;
+    transform: scale(1.16);
+    animation: pickCallImpact .48s cubic-bezier(.18,1.24,.35,1) .09s forwards;
+  }
+  .pickcall-team {
+    width: fit-content;
+    max-width: 86vw;
+    margin: 24px auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 13px 24px;
+    border-radius: 999px;
+    background: rgba(4,8,16,.78);
+    border: 1px solid var(--team-secondary);
+    box-shadow: 0 0 32px var(--team-glow), inset 0 0 22px rgba(255,255,255,.03);
+    opacity: 0;
+    transform: translateY(16px);
+    animation: pickCallUp .4s ease .24s forwards;
+  }
+  .pickcall-team .avatar { width:54px;height:54px;border-color:var(--team-secondary); }
+  .pickcall-team > div:last-child { min-width:0; }
+  .pickcall-team-name { min-width:0;color:var(--text);font-size:clamp(21px,2.7vw,38px);font-weight:950;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .pickcall-owner { color:var(--text-dim);font-size:12px;font-weight:750;margin-top:3px;letter-spacing:.5px; }
+  @keyframes pickSignalWave { 0%{opacity:0;transform:translate(-50%,-50%) scale(.28)} 35%{opacity:.7} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.15)} }
+  @keyframes pickCallImpact { 0%{opacity:0;transform:scale(1.16);filter:blur(8px)} 70%{opacity:1;transform:scale(.98);filter:blur(0)} 100%{opacity:1;transform:none} }
+  @keyframes pickCallUp { to{opacity:1;transform:none} }
+  #pickcall.handoff { animation: pickCallHandoff .34s cubic-bezier(.55,0,.75,.2) forwards; }
+  @keyframes pickCallHandoff { to{opacity:0;transform:scale(.9);filter:blur(9px)} }
+  #transitionveil {
+    position:absolute;
+    inset:0;
+    z-index:8;
+    pointer-events:none;
+    opacity:0;
+    background:
+      radial-gradient(circle at 50% 48%, rgba(255,255,255,.88), var(--team-glow) 22%, transparent 62%),
+      linear-gradient(115deg, transparent 34%, rgba(255,255,255,.2) 49%, transparent 64%);
+  }
+  #transitionveil.active { animation: revealHandoff .62s cubic-bezier(.22,.68,.32,1) both; }
+  @keyframes revealHandoff { 0%{opacity:0;transform:scale(.94)} 42%{opacity:.78;transform:scale(1)} 100%{opacity:0;transform:scale(1.08)} }
+
+  .selection-team {
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: clamp(34px,3.4vw,54px);
+    line-height: .96;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    text-shadow: 0 0 24px var(--team-glow);
+    overflow-wrap: anywhere;
+  }
+  .selection-heading { display:flex;align-items:center;gap:13px;min-width:0; }
+  .selection-heading .avatar { width:48px;height:48px;border-color:var(--team-secondary);flex:0 0 auto; }
+  .selection-heading .selection-team { min-width:0;font-size:clamp(30px,2.8vw,46px); }
+  .selection-pick {
+    display:inline-block;
+    margin-top:10px;
+    color:var(--team-secondary-text);
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+  }
+  .team-build { margin-top:20px;padding-top:18px;border-top:1px solid rgba(255,255,255,.1); }
+  .build-head { display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:12px; }
+  .build-label { color:var(--team-secondary-text);font-size:11px;font-weight:950;letter-spacing:1.8px;text-transform:uppercase; }
+  .build-sub { color:var(--text-dim);font-size:10px;font-weight:700;margin-top:3px; }
+  .build-identity { max-width:52%;color:var(--text);font-size:10px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;text-align:right; }
+  .comp-grid { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px; }
+  .comp-item { display:grid;place-items:center;gap:2px;padding:7px 2px 6px;border-radius:8px;background:color-mix(in srgb,var(--comp-color) 15%,rgba(255,255,255,.025));border:1px solid color-mix(in srgb,var(--comp-color) 42%,transparent); }
+  .comp-item.zero { opacity:.38;background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.08); }
+  .comp-pos { color:var(--comp-color);font-size:9px;font-weight:950;letter-spacing:.4px; }
+  .comp-count { color:var(--text);font-family:var(--font-display);font-size:21px;line-height:1; }
+  .comp-bar { display:flex;height:7px;margin-top:10px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.055);box-shadow:inset 0 1px 3px rgba(0,0,0,.45); }
+  .comp-bar span { min-width:5px;box-shadow:inset -1px 0 rgba(0,0,0,.3); }
+  .experience-summary { display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap; }
+  .experience-pill { padding:4px 8px;border-radius:999px;font-size:9px;font-weight:950;letter-spacing:.5px;text-transform:uppercase; }
+  .experience-pill.rookie { color:var(--rookie);background:rgba(255,95,162,.11);border:1px solid rgba(255,95,162,.3); }
+  .experience-pill.veteran { color:var(--veteran);background:rgba(94,200,255,.1);border:1px solid rgba(94,200,255,.3); }
+  .build-path { display:flex;align-items:center;gap:5px;width:100%;max-width:100%;margin-top:12px;min-width:0;overflow:hidden;contain:layout; }
+  .path-label { flex:0 0 auto;color:var(--text-dim);font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;margin-right:2px; }
+  .path-chip { flex:0 0 auto;display:grid;place-items:center;min-width:27px;height:22px;padding:0 6px;border-radius:6px;color:#fff;background:var(--chip-color);font-size:9px;font-weight:950;box-shadow:0 3px 9px rgba(0,0,0,.28); }
+  .path-chip.earlier { color:var(--text-dim);background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.11);box-shadow:none; }
+  .path-chip.current { outline:2px solid #fff;outline-offset:1px;animation:pathChipPop .5s cubic-bezier(.2,1.4,.35,1) .9s both; }
+  @keyframes pathChipPop { from{opacity:.25;transform:scale(.55)} to{opacity:1;transform:none} }
+
+  /* ---------- BROADCAST SETTINGS ---------- */
+  #settingspanel { position:fixed;right:22px;top:104px;width:min(390px,calc(100vw - 28px));z-index:99;padding:18px;border-radius:18px;background:linear-gradient(155deg,rgba(18,27,47,.98),rgba(6,11,21,.98));border:1px solid rgba(255,255,255,.13);box-shadow:0 28px 80px rgba(0,0,0,.62),0 0 0 1px rgba(255,204,51,.06);backdrop-filter:blur(18px);opacity:0;transform:translateY(-10px) scale(.97);pointer-events:none;transition:opacity .2s ease,transform .24s cubic-bezier(.2,1.15,.35,1); }
+  #settingspanel.show { opacity:1;transform:none;pointer-events:auto; }
+  .settings-head { display:flex;align-items:center;justify-content:space-between;padding:0 2px 12px;border-bottom:1px solid rgba(255,255,255,.09); }
+  .settings-kicker { color:var(--accent);font-size:9px;font-weight:950;letter-spacing:1.8px;text-transform:uppercase; }
+  .settings-title { font-family:var(--font-display);font-size:29px;letter-spacing:.5px;line-height:1;margin-top:3px; }
+  #settingsclose { width:34px;height:34px;border:1px solid rgba(255,255,255,.1);border-radius:50%;background:rgba(255,255,255,.055);color:var(--text);font-size:24px;line-height:1;cursor:pointer; }
+  .setting-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;padding:15px 2px;border-bottom:1px solid rgba(255,255,255,.07); }
+  .setting-name { color:var(--text);font-size:14px;font-weight:850; }
+  .setting-help { color:var(--text-dim);font-size:11px;line-height:1.4;margin-top:4px; }
+  .setting-switch { position:relative;width:48px;height:27px;border:1px solid rgba(255,255,255,.14);border-radius:99px;background:rgba(255,255,255,.08);padding:0;cursor:pointer;transition:background .2s,border-color .2s; }
+  .setting-switch span { position:absolute;left:3px;top:3px;width:19px;height:19px;border-radius:50%;background:var(--text-dim);box-shadow:0 2px 8px rgba(0,0,0,.45);transition:transform .24s cubic-bezier(.2,1.3,.35,1),background .2s; }
+  .setting-switch[aria-checked="true"] { background:rgba(255,204,51,.2);border-color:rgba(255,204,51,.65); }
+  .setting-switch[aria-checked="true"] span { transform:translateX(21px);background:var(--accent); }
+  .settings-action { width:100%;margin-top:14px;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,204,51,.28);background:rgba(255,204,51,.08);color:var(--accent);font:800 12px var(--font-body);letter-spacing:.3px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s; }
+  .settings-action:hover:not(:disabled) { background:rgba(255,204,51,.15);border-color:rgba(255,204,51,.55); }
+  .settings-action:active:not(:disabled) { transform:scale(.98); }
+  .settings-action:disabled { opacity:.32;cursor:default; }
+  .settings-foot { display:flex;align-items:center;gap:8px;padding:13px 2px 0;color:var(--text-dim);font-size:11px;font-weight:750; }
+  #modeStatusDot { width:8px;height:8px;border-radius:50%;background:var(--value);box-shadow:0 0 10px rgba(53,212,136,.65); }
+  .performance-readout { padding-top:7px; }
+  #performanceStatusDot { width:8px;height:8px;border-radius:50%;background:var(--text-dim);box-shadow:0 0 8px rgba(139,147,167,.45); }
+  .performance-readout.good #performanceStatusDot { background:var(--value);box-shadow:0 0 10px rgba(53,212,136,.65); }
+  .performance-readout.warn #performanceStatusDot { background:#e0a72e;box-shadow:0 0 10px rgba(224,167,46,.65); }
+  body.mock-mode #modeStatusDot { background:#5ec8ff;box-shadow:0 0 10px rgba(94,200,255,.7); }
+  body.mock-mode #settingsbtn:not(.active) { color:#5ec8ff;border-color:rgba(94,200,255,.42);background:rgba(94,200,255,.1); }
+
+  #spotlight.motion-b #headshot.reveal { animation-name: headshotDrop; }
+  #spotlight.motion-c #headshot.reveal { animation-name: headshotZoom; }
+  #spotlight.motion-b #playername.reveal { animation-name: infoFromBelow; }
+  #spotlight.motion-c #playername.reveal { animation-name: infoSnap; }
+  @keyframes headshotDrop { 0%{opacity:0;transform:translateY(-55px) scale(.74) rotate(5deg)} 66%{opacity:1;transform:translateY(7px) scale(1.04) rotate(-1deg)} 100%{opacity:1;transform:none} }
+  @keyframes headshotZoom { 0%{opacity:0;transform:scale(1.38);filter:blur(10px)} 64%{opacity:1;transform:scale(.97);filter:blur(0)} 100%{opacity:1;transform:none} }
+  @keyframes infoFromBelow { to{opacity:1;transform:translateY(0)} }
+  @keyframes infoSnap { 0%{opacity:0;transform:scale(.86)} 72%{opacity:1;transform:scale(1.025)} 100%{opacity:1;transform:none} }
+  .gcell.latest { animation: latestPickGlow 1.35s ease both; }
+  @keyframes latestPickGlow { 0%{transform:scale(.91);box-shadow:0 0 0 2px #fff,0 0 40px var(--accent)} 55%{transform:scale(1.025)} 100%{transform:none;box-shadow:none} }
+  .teamcard.on-clock { border-color:rgba(255,204,51,.62);box-shadow:0 0 0 1px rgba(255,204,51,.16),0 0 28px rgba(255,204,51,.1); }
+  .teamcard.on-clock::before { content:"ON THE CLOCK";display:block;color:var(--accent);font-size:9px;font-weight:950;letter-spacing:1.5px;margin-bottom:8px; }
+
+  #reconnectbanner.restored { background:rgba(53,212,136,.16);border-color:rgba(53,212,136,.5);color:var(--value); }
+  #reconnectbanner.restored::before { background:var(--value);animation:none; }
+  body.low-power #pickcall::before { display:none; }
+
+  @media (max-width: 1320px) {
+    #card {
+      grid-template-columns: minmax(250px, 31vw) minmax(340px, 1fr) minmax(240px, 25vw);
+      padding-left: 24px;
+      padding-right: 24px;
+      gap: 12px;
+    }
+    #photostage {
+      width: min(44vw, 60vh, 560px);
+      height: min(44vw, 60vh, 560px);
+      min-width: 320px;
+      min-height: 320px;
+    }
+    #draftedby {
+      right: 22px;
+      width: clamp(238px, 24vw, 310px);
+      padding: 18px;
+    }
+    #playername { font-size: clamp(44px, 5.5vw, 82px); }
+  }
+
+  @media (max-height: 820px) and (min-width: 761px) {
+    #card {
+      top: 0;
+      bottom: 0;
+      align-items: center;
+      padding-top: clamp(30px, 5vh, 58px);
+      padding-bottom: clamp(22px, 4vh, 46px);
+    }
+    #playerinfo {
+      align-self: center;
+      padding-top: 0;
+    }
+    #photostage {
+      width: min(46vw, 68vh, 620px);
+      height: min(46vw, 68vh, 620px);
+      min-width: 380px;
+      min-height: 380px;
+    }
+    #headshot {
+      width: 80%;
+      height: 80%;
+    }
+    #draftedby {
+      top: 50%;
+      bottom: auto;
+      transform: translateY(-50%) translateX(30px);
+      padding: 22px;
+      min-height: 330px;
+    }
+    #draftedby.reveal {
+      animation: panelFromRight .58s ease .7s forwards;
+    }
+    #playername {
+      font-size: clamp(54px, 6.2vw, 92px);
+    }
+    #meta { margin-top: 0; }
+    .badge { font-size: clamp(20px,1.8vw,29px); }
+    #nflteam { font-size: clamp(22px,2vw,31px); }
+    #skiphint { bottom: 14px; }
+  }
+
+  @media (max-width: 1050px) {
+    #topbar {
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #onclock { flex: 1 1 420px; }
+    #progress { order: 3; text-align: left; min-width: 170px; }
+    #controls {
+      flex: 1 1 360px;
+      max-width: none;
+    }
+    #card {
+      grid-template-columns: minmax(240px, 37vw) minmax(280px, 1fr);
+      grid-template-rows: auto auto;
+      align-content: center;
+      padding-top: 34px;
+      padding-bottom: clamp(178px, 22vh, 226px);
+    }
+    #playerinfo { grid-column: 1; padding-top: 0; }
+    #herowrap { grid-column: 2; }
+    #draftedby {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      top: auto;
+      bottom: 18px;
+      width: auto;
+      min-height: 0;
+      transform: translateY(18px);
+      display: grid;
+      grid-template-columns: minmax(190px, 1fr) minmax(180px, 0.8fr) minmax(240px, 1fr);
+      gap: 14px;
+      align-items: center;
+    }
+    #draftedby .team-build { margin-top:0;padding:0 0 0 14px;border-top:0;border-left:1px solid rgba(255,255,255,.1); }
+    #draftedby .build-path { display:none; }
+    #draftedby.reveal { animation: panelFromBottom .48s ease .7s forwards; }
+    @keyframes panelFromBottom { to { opacity: 1; transform: translateY(0); } }
+    #draftedby .panel-title,
+    #draftedby .upnext-title { margin-bottom: 6px; }
+    #draftedby .panelrule { display: none; }
+    .upnext-row { padding: 4px 0; }
+  }
+
+  @media (max-width: 760px) {
+    body { overflow: auto; }
+    #app { min-height: 100vh; height: auto; }
+    .recaphead {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .recaptools {
+      justify-content: flex-start;
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      padding-bottom: 4px;
+    }
+    .recaptools button { flex: 0 0 auto; }
+    .recapteams,
+    .recaplineups { grid-template-columns: 1fr; }
+    #topbar {
+      min-height: 0;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(6,10,20,0.94);
+      backdrop-filter: blur(12px);
+    }
+    #timerwrap { width: 62px; height: 62px; }
+    #timercluster { padding:15px 9px 5px; }
+    #timertext { font-size:24px; }
+    #onclock .team { font-size: 22px; }
+    #controls { justify-content: flex-start; }
+    #controls button {
+      height: 36px;
+      max-width: 120px;
+      font-size: 13px;
+      padding: 0 10px;
+    }
+    #main { min-height: 850px; }
+    #card {
+      position: relative;
+      inset: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 76px 18px 350px;
+      gap: 18px;
+      min-height: 850px;
+    }
+    #pickribbon {
+      left: 50%;
+      top: 18px;
+      font-size: 16px;
+      padding: 8px 18px;
+      max-width: calc(100vw - 36px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #playerinfo {
+      order: 2;
+      width: 100%;
+      padding-top: 0;
+      text-align: center;
+      max-height:none;
+    }
+    #playername { font-size: clamp(44px, 13vw, 70px); }
+    #player-divider { margin: 14px auto; }
+    #meta, #playercards, #college-line {
+      justify-content: center;
+    }
+    #synergy-callout {
+      margin-left: auto;
+      margin-right: auto;
+      text-align: left;
+    }
+    #herowrap { order: 1; width: 100%; }
+    #photostage {
+      width: min(82vw, 380px);
+      height: min(82vw, 380px);
+      min-width: 260px;
+      min-height: 260px;
+      margin: 0 auto;
+    }
+    #draftedby {
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      padding: 16px;
+    }
+    #draftedby .team-build { margin-top:14px;padding:14px 0 0;border-left:0;border-top:1px solid rgba(255,255,255,.1); }
+    #draftedby .build-path { display:flex; }
+    #settingspanel { right:14px;top:86px;max-height:calc(100vh - 100px);overflow:auto; }
+    #draftedby .draftrow .avatar { width: 48px; height: 48px; }
+    #draftedby b { font-size: 22px; }
+    #ticker {
+      gap: 18px;
+      padding: 10px 16px;
+      font-size: 14px;
+      overflow-x: auto;
+    }
+    #gridview,
+    #teamview {
+      padding: 12px;
+    }
+    #teamgrid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-height: 690px) and (min-width: 761px) {
+    #topbar { min-height: 74px; padding-top: 8px; padding-bottom: 8px; }
+    #timerwrap { width: 62px; height: 62px; }
+    #onclock .team { font-size: 22px; }
+    #card {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+    #playerinfo { padding-top: 0; }
+    #playercards,
+    #college-line { margin-top: 12px; }
+    #draftedby { padding: 14px; }
+    #ticker { min-height: 48px; padding-top: 8px; padding-bottom: 8px; font-size: 15px; }
+  }
+
+  @media (max-height:690px) and (min-width:761px) and (max-width:1050px) {
+    #card { padding-bottom:150px; }
+    #draftedby { bottom:8px; }
+    #draftedby .experience-summary,#draftedby .comp-bar { display:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<div id="setupscreen">
+  <div class="setupbox">
+    <h1>Connect a Sleeper Draft</h1>
+    <p class="sub">Find your live draft automatically, or paste a draft ID directly.</p>
+
+    <label style="font-size:12px; color:var(--text-dim); letter-spacing:1px;">SLEEPER USERNAME</label>
+    <div class="setuprow" style="margin-top:6px;">
+      <input id="usernameInput" type="text" placeholder="e.g. kbedford" autocomplete="off" />
+      <button id="detectBtn">Find Drafts</button>
+    </div>
+    <div id="draftlist" class="draftlist"></div>
+
+    <div class="setupdivider">OR</div>
+
+    <label style="font-size:12px; color:var(--text-dim); letter-spacing:1px;">DRAFT ID OR LINK</label>
+    <div class="setuprow" style="margin-top:6px;">
+      <input id="draftIdInput" type="text" placeholder="Paste a draft ID or Sleeper draft/mock link" autocomplete="off" />
+      <button id="connectBtn">Connect</button>
+    </div>
+    <div class="setupmsg" style="margin-top:8px;">Standalone mock drafts often can't be auto-detected by username — paste the mock's share link here instead and it'll connect straight to it.</div>
+
+    <div id="setupErr" class="setuperr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <div id="onclock">
+      <div id="timercluster">
+        <div class="timer-caption">Draft clock</div>
+        <div id="timerwrap">
+          <svg viewBox="0 0 66 66">
+            <circle id="timerbg" cx="33" cy="33" r="28"></circle>
+            <circle id="timerfg" cx="33" cy="33" r="28"></circle>
+          </svg>
+          <div id="timertext">--</div>
+        </div>
+      </div>
+      <div class="avatar" id="onclockavatar">?</div>
+      <div class="namewrap">
+        <div class="label">On the clock</div>
+        <div class="team" id="onclockname">Waiting for draft...</div>
+        <div class="clock-owner" id="onclockowner"></div>
+      </div>
+    </div>
+    <div id="progress">
+      <div class="big" id="pickcounter">Pick — of —</div>
+      <div id="roundcounter">Round —</div>
+    </div>
+    <div id="controls">
+      <button id="gridbtn" title="Grid view (g)">▦ Board</button>
+      <button id="teamsbtn" title="Team rosters view (t)">🧩 Teams</button>
+      <button id="zoombtn" title="Grid zoom (z)">🔍 100%</button>
+      <button id="settingsbtn" title="Broadcast settings">⚙ Live</button>
+      <button id="changebtn" title="Change draft">🔁</button>
+      <button id="fsbtn" title="Fullscreen (f)">⛶</button>
+      <button id="soundbtn" title="Toggle sound (m)">🔊</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="spotlight">
+      <div id="logopattern"></div>
+      <div id="transitionveil"></div>
+      <div id="pickribbon"></div>
+      <div id="card">
+        <div id="waiting">Waiting for the draft to start...</div>
+      </div>
+      <div id="draftedby"></div>
+      <div id="skiphint">press <kbd>&rarr;</kbd> or <kbd>space</kbd> to skip</div>
+    </div>
+    <div id="gridview">
+      <div id="grid"></div>
+    </div>
+    <div id="teamview">
+      <div id="teamgrid"></div>
+    </div>
+  </div>
+
+  <div id="ticker"><span class="item">Recent picks will appear here...</span></div>
+</div>
+
+<div id="settingspanel" role="dialog" aria-label="Broadcast settings" aria-hidden="true">
+  <div class="settings-head">
+    <div><div class="settings-kicker">Broadcast control</div><div class="settings-title">Settings</div></div>
+    <button id="settingsclose" aria-label="Close settings">×</button>
+  </div>
+  <div class="setting-row">
+    <div><div class="setting-name">Mock Draft Mode</div><div class="setting-help">Compresses queued reveals and keeps only the newest backlog during rapid mocks.</div></div>
+    <button class="setting-switch" id="mockModeToggle" role="switch" aria-checked="false"><span></span></button>
+  </div>
+  <div class="setting-row">
+    <div><div class="setting-name">Team Build Insights</div><div class="setting-help">Shows every team’s position mix and draft path when they select.</div></div>
+    <button class="setting-switch" id="teamBuildToggle" role="switch" aria-checked="true"><span></span></button>
+  </div>
+  <div class="setting-row">
+    <div><div class="setting-name">Broadcast Sound</div><div class="setting-help">Pick stingers, clock warnings, and transition cues.</div></div>
+    <button class="setting-switch" id="settingsSoundToggle" role="switch" aria-checked="true"><span></span></button>
+  </div>
+  <button id="replayRevealBtn" class="settings-action">↻ Replay latest pick reveal</button>
+  <div class="settings-foot"><span id="modeStatusDot"></span><span id="modeStatusText">Full broadcast timing</span></div>
+  <div class="settings-foot performance-readout"><span id="performanceStatusDot"></span><span id="performanceStatusText">Render health · waiting for a reveal</span></div>
+</div>
+
+<div id="tradebanner"></div>
+<div id="reconnectbanner">📡 Reconnecting to draft…</div>
+
+<div id="complete">
+  <div class="recaphead">
+    <div class="recapintro">
+      <h1>DRAFT COMPLETE</h1>
+      <div class="recapsub">League-aware Draft Fit, lineup builds, market context, and the complete board.</div>
+    </div>
+    <div class="recaptools">
+      <button id="recapTeamsBtn" class="active">Draft Fit</button>
+      <button id="recapLineupsBtn">Lineups</button>
+      <button id="recapBoardBtn">Final Board</button>
+      <button id="recapZoomBtn">Zoom 100%</button>
+    </div>
+  </div>
+  <div id="recapawards"></div>
+  <div id="recapgrid"></div>
+</div>
+
+<script>
+const POS_COLORS = { QB: "var(--qb)", RB: "var(--rb)", WR: "var(--wr)", TE: "var(--te)", K: "var(--k)", DEF: "var(--def)" };
+const POS_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF", "FLEX"];
+// hex versions for building the glow/ring CSS vars behind the reveal card
+const POS_HEX = { QB: "#e74c3c", RB: "#2ecc71", WR: "#3498db", TE: "#e67e22", K: "#9b59b6", DEF: "#7f8c8d" };
+const TEAM_COLORS = {
+  ARI: ["#97233f", "#ffb612"], ATL: ["#a71930", "#000000"], BAL: ["#241773", "#9e7c0c"],
+  BUF: ["#00338d", "#c60c30"], CAR: ["#0085ca", "#101820"], CHI: ["#0b162a", "#c83803"],
+  CIN: ["#fb4f14", "#000000"], CLE: ["#311d00", "#ff3c00"], DAL: ["#003594", "#869397"],
+  DEN: ["#fb4f14", "#002244"], DET: ["#0076b6", "#b0b7bc"], GB: ["#203731", "#ffb612"],
+  HOU: ["#03202f", "#a71930"], IND: ["#002c5f", "#a2aaad"], JAX: ["#006778", "#d7a22a"],
+  KC: ["#e31837", "#ffb81c"], LV: ["#000000", "#a5acaf"], LAC: ["#0080c6", "#ffc20e"],
+  LAR: ["#003594", "#ffa300"], MIA: ["#008e97", "#fc4c02"], MIN: ["#4f2683", "#ffc62f"],
+  NE: ["#002244", "#c60c30"], NO: ["#d3bc8d", "#101820"], NYG: ["#0b2265", "#a71930"],
+  NYJ: ["#125740", "#ffffff"], PHI: ["#004c54", "#a5acaf"], PIT: ["#ffb612", "#101820"],
+  SEA: ["#002244", "#69be28"], SF: ["#aa0000", "#b3995d"], TB: ["#d50a0a", "#ff7900"],
+  TEN: ["#0c2340", "#4b92db"], WAS: ["#5a1414", "#ffb612"]
+};
+function teamTheme(teamAbbr) {
+  const [primary, secondary] = TEAM_COLORS[(teamAbbr || "").toUpperCase()] || ["#ffcc33", "#5ec8ff"];
+  const primaryText = readableTeamAccent(primary, secondary);
+  const secondaryText = readableTeamAccent(secondary, primary);
+  return {
+    primary,
+    secondary,
+    primaryText,
+    secondaryText,
+    secondaryInk: textOnColor(secondary),
+    glow: hexToRgba(primary, 0.42),
+    soft: hexToRgba(secondary, 0.28)
+  };
+}
+// ESPN hosts clean team logo PNGs at a predictable public URL keyed by lowercase
+// team abbreviation. Sleeper's abbreviations match ESPN's for every team except
+// Washington (Sleeper: WAS, ESPN: wsh).
+const TEAM_LOGO_OVERRIDES = { WAS: "wsh" };
+function teamLogoUrl(teamAbbr) {
+  if (!teamAbbr) return null;
+  const code = TEAM_LOGO_OVERRIDES[teamAbbr.toUpperCase()] || teamAbbr.toLowerCase();
+  return `https://a.espncdn.com/i/teamlogos/nfl/500/${code}.png`;
+}
+const teamLogoCache = new Map();
+const playerImageCache = new Map();
+const NFL_TEAM_CODES = ["ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB","HOU","IND","JAX","KC","LV","LAC","LAR","MIA","MIN","NE","NO","NYG","NYJ","PHI","PIT","SEA","SF","TB","TEN","WAS"];
+function preloadTeamLogo(teamAbbr) {
+  const key = (teamAbbr || "").toUpperCase();
+  if (!key || teamLogoCache.has(key)) return teamLogoCache.get(key) || null;
+  const img = new Image();
+  img.decoding = "async";
+  img.src = teamLogoUrl(key);
+  teamLogoCache.set(key, img);
+  return img;
+}
+function preloadAllTeamLogos() {
+  NFL_TEAM_CODES.forEach((team, i) => {
+    setTimeout(() => preloadTeamLogo(team), i * 60);
+  });
+}
+if ("requestIdleCallback" in window) {
+  requestIdleCallback(preloadAllTeamLogos, { timeout: 2500 });
+} else {
+  setTimeout(preloadAllTeamLogos, 1200);
+}
+function playerHeadshotUrl(playerId) {
+  return playerId ? `https://sleepercdn.com/content/nfl/players/${playerId}.jpg` : null;
+}
+function preloadHeadshot(playerId) {
+  const key = String(playerId || "");
+  if (!key || playerImageCache.has(key)) return playerImageCache.get(key) || null;
+  const img = new Image();
+  img.decoding = "async";
+  img.loading = "eager";
+  img.src = playerHeadshotUrl(key);
+  playerImageCache.set(key, img);
+  return img;
+}
+function primePickAssets(picks) {
+  (picks || []).slice(-18).forEach((pick) => {
+    preloadHeadshot(pick?.player?.id);
+    preloadTeamLogo(pick?.player?.team);
+  });
+}
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function relativeLuminance(hex) {
+  const { r, g, b } = hexRgb(hex);
+  return [r, g, b].map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+}
+function contrastRatio(a, b) {
+  const l1 = relativeLuminance(a);
+  const l2 = relativeLuminance(b);
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+function readableTeamAccent(color, fallback) {
+  const darkPanel = "#060a14";
+  if (contrastRatio(color, darkPanel) >= 3.4) return color;
+  if (fallback && contrastRatio(fallback, darkPanel) >= 3.4) return fallback;
+  return "#f4f6fb";
+}
+function textOnColor(hex) {
+  return contrastRatio(hex, "#06090f") >= 4.5 ? "#06090f" : "#f4f6fb";
+}
+
+const setupscreen = document.getElementById("setupscreen");
+const usernameInput = document.getElementById("usernameInput");
+const detectBtn = document.getElementById("detectBtn");
+const draftlist = document.getElementById("draftlist");
+const draftIdInput = document.getElementById("draftIdInput");
+const connectBtn = document.getElementById("connectBtn");
+const setupErr = document.getElementById("setupErr");
+
+const appEl = document.getElementById("app");
+const spotlight = document.getElementById("spotlight");
+const gridview = document.getElementById("gridview");
+const teamview = document.getElementById("teamview");
+const teamgrid = document.getElementById("teamgrid");
+const grid = document.getElementById("grid");
+const card = document.getElementById("card");
+const pickribbon = document.getElementById("pickribbon");
+const draftedby = document.getElementById("draftedby");
+const logopattern = document.getElementById("logopattern");
+const skiphint = document.getElementById("skiphint");
+const onclockname = document.getElementById("onclockname");
+const onclockowner = document.getElementById("onclockowner");
+const onclockavatar = document.getElementById("onclockavatar");
+const pickcounter = document.getElementById("pickcounter");
+const roundcounter = document.getElementById("roundcounter");
+const timertext = document.getElementById("timertext");
+const timerfg = document.getElementById("timerfg");
+const timerwrap = document.getElementById("timerwrap");
+const reconnectbanner = document.getElementById("reconnectbanner");
+const ticker = document.getElementById("ticker");
+const soundbtn = document.getElementById("soundbtn");
+const fsbtn = document.getElementById("fsbtn");
+const gridbtn = document.getElementById("gridbtn");
+const teamsbtn = document.getElementById("teamsbtn");
+const zoombtn = document.getElementById("zoombtn");
+const settingsbtn = document.getElementById("settingsbtn");
+const changebtn = document.getElementById("changebtn");
+const settingspanel = document.getElementById("settingspanel");
+const settingsclose = document.getElementById("settingsclose");
+const mockModeToggle = document.getElementById("mockModeToggle");
+const teamBuildToggle = document.getElementById("teamBuildToggle");
+const settingsSoundToggle = document.getElementById("settingsSoundToggle");
+const replayRevealBtn = document.getElementById("replayRevealBtn");
+const modeStatusText = document.getElementById("modeStatusText");
+const performanceStatusText = document.getElementById("performanceStatusText");
+const performanceReadout = document.querySelector(".performance-readout");
+const transitionveil = document.getElementById("transitionveil");
+const controls = document.getElementById("controls");
+const tradebanner = document.getElementById("tradebanner");
+const completeOverlay = document.getElementById("complete");
+const recapgrid = document.getElementById("recapgrid");
+const recapawards = document.getElementById("recapawards");
+const recapTeamsBtn = document.getElementById("recapTeamsBtn");
+const recapLineupsBtn = document.getElementById("recapLineupsBtn");
+const recapBoardBtn = document.getElementById("recapBoardBtn");
+const recapZoomBtn = document.getElementById("recapZoomBtn");
+
+const RADIUS = 28;
+const CIRC = 2 * Math.PI * RADIUS;
+timerfg.style.strokeDasharray = CIRC;
+
+let allPicks = [];
+let teamsOrder = [];
+let currentTeams = 12;
+let currentRounds = null;
+let draftStatus = null;
+let adpAvailable = false;
+let leagueContext = { roster_positions: [], scoring_settings: {}, draft_settings: {}, scoring_type: null };
+let viewMode = "grid"; // resting view when nothing is actively being revealed: 'grid' | 'teams'
+let gridRenderKey = "";
+let teamRenderKey = "";
+let clockRenderKey = "";
+let timerRenderKey = "";
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const lowPowerMode = reduceMotion || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || (navigator.deviceMemory && navigator.deviceMemory <= 4);
+document.body.classList.toggle("low-power", lowPowerMode);
+let recapMode = "teams";
+let recapZoomIndex = 0;
+let recapCelebrated = false;
+let performanceRaf = 0;
+let performanceLastFrame = 0;
+let performanceSamples = [];
+let spotlightDormantTimer = null;
+
+const BROADCAST_SETTINGS_KEY = "draft-viewer-broadcast-settings-v1";
+let broadcastSettings = { mockDraftMode: false, showTeamBuild: true, soundEnabled: true };
+try {
+  const savedSettings = JSON.parse(localStorage.getItem(BROADCAST_SETTINGS_KEY) || "null");
+  if (savedSettings && typeof savedSettings === "object") {
+    for (const key of Object.keys(broadcastSettings)) {
+      if (typeof savedSettings[key] === "boolean") broadcastSettings[key] = savedSettings[key];
+    }
+  }
+} catch {}
+
+function saveBroadcastSettings() {
+  try { localStorage.setItem(BROADCAST_SETTINGS_KEY, JSON.stringify(broadcastSettings)); } catch {}
+}
+
+function renderBroadcastSettings() {
+  document.body.classList.toggle("mock-mode", broadcastSettings.mockDraftMode);
+  mockModeToggle.setAttribute("aria-checked", String(broadcastSettings.mockDraftMode));
+  teamBuildToggle.setAttribute("aria-checked", String(broadcastSettings.showTeamBuild));
+  settingsSoundToggle.setAttribute("aria-checked", String(broadcastSettings.soundEnabled));
+  settingsbtn.textContent = broadcastSettings.mockDraftMode ? "⚡ Mock" : "⚙ Live";
+  settingsbtn.classList.toggle("active", settingspanel.classList.contains("show"));
+  replayRevealBtn.disabled = allPicks.length === 0;
+  modeStatusText.textContent = broadcastSettings.mockDraftMode
+    ? "Mock mode · rapid-pick catch-up enabled"
+    : "Full broadcast timing · every reveal plays";
+}
+
+function toggleSettingsPanel(show = !settingspanel.classList.contains("show")) {
+  settingspanel.classList.toggle("show", show);
+  settingspanel.setAttribute("aria-hidden", String(!show));
+  renderBroadcastSettings();
+}
+
+function monitorRevealPerformance(timestamp) {
+  if (!spotlight.classList.contains("active")) {
+    performanceRaf = 0;
+    performanceLastFrame = 0;
+    performanceSamples = [];
+    return;
+  }
+  if (performanceLastFrame) {
+    const delta = timestamp - performanceLastFrame;
+    if (delta > 0 && delta < 120) performanceSamples.push(delta);
+  }
+  performanceLastFrame = timestamp;
+  if (performanceSamples.length >= 45) {
+    const recent = performanceSamples.slice(-90);
+    const average = recent.reduce((sum, value) => sum + value, 0) / recent.length;
+    const fps = Math.round(1000 / average);
+    const healthy = fps >= 52;
+    performanceStatusText.textContent = healthy ? `Render health · smooth at ${fps} FPS` : `Render health · under load at ${fps} FPS`;
+    performanceReadout.classList.toggle("good", healthy);
+    performanceReadout.classList.toggle("warn", !healthy);
+    if (performanceSamples.length > 90) performanceSamples = recent;
+  }
+  performanceRaf = requestAnimationFrame(monitorRevealPerformance);
+}
+
+function startRevealPerformanceMonitor() {
+  if (performanceRaf) return;
+  performanceLastFrame = 0;
+  performanceSamples = [];
+  performanceRaf = requestAnimationFrame(monitorRevealPerformance);
+}
+
+document.addEventListener("visibilitychange", () => {
+  document.body.classList.toggle("app-suspended", document.hidden);
+});
+
+// ==================================================
+// SETUP / DRAFT SELECTION
+// ==================================================
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function fmtDraftDate(ms) {
+  if (!ms) return "";
+  try { return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+  catch { return ""; }
+}
+
+async function runDetect() {
+  const username = usernameInput.value.trim();
+  if (!username) return;
+  setupErr.textContent = "";
+  draftlist.innerHTML = '<div class="setupmsg">Searching...</div>';
+  detectBtn.disabled = true;
+  try {
+    const res = await fetch(`/api/detect?username=${encodeURIComponent(username)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Search failed");
+    if (!data.drafts || data.drafts.length === 0) {
+      draftlist.innerHTML = '<div class="setupmsg">No drafts found for that username.</div>';
+      return;
+    }
+    draftlist.innerHTML = "";
+    const kindLabel = { league: "League Draft", practice: "Practice Draft", mock: "Mock Draft" };
+    const sectionLabel = { league: "League Drafts", practice: "Practice Drafts", mock: "Mock Drafts" };
+
+    // Group by kind so a busy list of league drafts can never crowd mock drafts
+    // out of view — each kind gets its own section instead of one flat, capped list.
+    const groups = { league: [], practice: [], mock: [] };
+    data.drafts.forEach((d) => { (groups[d.kind] || groups.mock).push(d); });
+
+    const PER_SECTION = 8;
+    ["league", "practice", "mock"].forEach((kind) => {
+      const items = groups[kind];
+      if (!items.length) return;
+
+      const heading = document.createElement("div");
+      heading.className = "draftsection";
+      heading.textContent = `${sectionLabel[kind]} (${items.length})`;
+      draftlist.appendChild(heading);
+
+      items.slice(0, PER_SECTION).forEach((d) => {
+        const el = document.createElement("div");
+        el.className = "draftcard";
+        const title = d.league_name || d.metadata_name || kindLabel[d.kind] || "Draft";
+        const kind2 = kindLabel[d.kind] || "Draft";
+        el.innerHTML = `
+          <div>
+            <div class="dname">${escapeHtml(title)} <span class="dkind ${d.kind}">${kind2}</span></div>
+            <div class="dmeta">${d.teams || "?"} teams · ${d.rounds || "?"} rounds · ${escapeHtml(fmtDraftDate(d.start_time || d.created))} · ${escapeHtml(d.draft_id)}</div>
+          </div>
+          <div class="dstatus ${d.status}">${d.status.replace("_", " ")}</div>
+        `;
+        el.onclick = () => connectDraft(d.draft_id);
+        draftlist.appendChild(el);
+      });
+
+      if (items.length > PER_SECTION) {
+        const more = document.createElement("div");
+        more.className = "setupmsg";
+        more.style.margin = "2px 0 6px";
+        more.textContent = `+ ${items.length - PER_SECTION} more ${sectionLabel[kind].toLowerCase()} not shown`;
+        draftlist.appendChild(more);
+      }
+    });
+  } catch (err) {
+    setupErr.textContent = err.message;
+    draftlist.innerHTML = "";
+  } finally {
+    detectBtn.disabled = false;
+  }
+}
+
+async function connectDraft(draftId) {
+  setupErr.textContent = "";
+  try {
+    const res = await fetch("/api/draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft_id: draftId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not connect to that draft");
+    location.reload();
+  } catch (err) {
+    setupErr.textContent = err.message;
+  }
+}
+
+detectBtn.onclick = runDetect;
+usernameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runDetect(); });
+connectBtn.onclick = () => {
+  const raw = draftIdInput.value.trim();
+  if (raw) connectDraft(extractDraftId(raw));
+};
+draftIdInput.addEventListener("keydown", (e) => { if (e.key === "Enter") connectBtn.click(); });
+
+// Accepts a bare draft ID or a full Sleeper URL (app deep link, web draft room,
+// or mock-draft share link) and pulls the numeric draft ID out of it. Sleeper's
+// public API has no reliable way to list a user's standalone/practice mock
+// drafts, so pasting the mock's own share link is the dependable way to load one.
+function extractDraftId(input) {
+  const digitsOnly = input.match(/^\d+$/);
+  if (digitsOnly) return input;
+  const match = input.match(/(\d{15,20})/); // Sleeper draft IDs are long numeric snowflake IDs
+  return match ? match[1] : input;
+}
+changebtn.onclick = () => { setupscreen.classList.add("show"); };
+
+async function checkStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    if (data.configured) {
+      appEl.classList.add("ready");
+      connect();
+    } else {
+      setupscreen.classList.add("show");
+    }
+  } catch {
+    setupscreen.classList.add("show");
+  }
+}
+
+// ==================================================
+// SOUND
+// ==================================================
+let muted = !broadcastSettings.soundEnabled;
+function setSoundEnabled(enabled) {
+  broadcastSettings.soundEnabled = !!enabled;
+  muted = !broadcastSettings.soundEnabled;
+  soundbtn.textContent = muted ? "🔇" : "🔊";
+  if (masterGain) {
+    masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    masterGain.gain.setTargetAtTime(muted ? 0 : 1, audioCtx.currentTime, 0.01);
+  }
+  saveBroadcastSettings();
+  renderBroadcastSettings();
+}
+soundbtn.onclick = () => setSoundEnabled(muted);
+
+let audioCtx;
+let masterGain;
+function ensureAudio() {
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (!masterGain) {
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = muted ? 0 : 1;
+    masterGain.connect(audioCtx.destination);
+  }
+  return audioCtx;
+}
+function playTone(freqs, opts = {}) {
+  if (muted) return;
+  const { type = "sine", gain = 0.22, spacing = 0.08, dur = 0.4 } = opts;
+  try {
+    const ctx = ensureAudio();
+    const now = ctx.currentTime;
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(gain, now + 0.02 + i * spacing);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur + i * spacing);
+      osc.connect(g).connect(masterGain);
+      osc.start(now + i * spacing);
+      osc.stop(now + dur + 0.1 + i * spacing);
+    });
+  } catch (e) {}
+}
+// Short synthesized stingers avoid network/audio-file latency. Position-based
+// motifs give each selection a little identity without turning the room noisy.
+const PICK_MOTIFS = {
+  QB: [392, 587, 784], RB: [330, 440, 659], WR: [440, 659, 880],
+  TE: [349, 523, 698], K: [494, 740, 988], DEF: [294, 392, 523]
+};
+function soundPickIncoming(pick) {
+  const seed = Number(pick?.pick_no || 0) % 4;
+  playTone([360 + seed * 24, 540 + seed * 30], { type: "sine", spacing: 0.045, dur: 0.22, gain: 0.16 });
+}
+
+settingsbtn.onclick = (event) => { event.stopPropagation(); toggleSettingsPanel(); };
+settingsclose.onclick = () => toggleSettingsPanel(false);
+settingspanel.onclick = (event) => event.stopPropagation();
+document.addEventListener("click", () => toggleSettingsPanel(false));
+mockModeToggle.onclick = () => {
+  broadcastSettings.mockDraftMode = !broadcastSettings.mockDraftMode;
+  if (broadcastSettings.mockDraftMode && typeof revealQueue !== "undefined" && revealQueue.length > MAX_REVEAL_BACKLOG) {
+    revealQueue = revealQueue.slice(-MAX_REVEAL_BACKLOG);
+  }
+  saveBroadcastSettings();
+  renderBroadcastSettings();
+};
+teamBuildToggle.onclick = () => {
+  broadcastSettings.showTeamBuild = !broadcastSettings.showTeamBuild;
+  saveBroadcastSettings();
+  renderBroadcastSettings();
+};
+settingsSoundToggle.onclick = () => setSoundEnabled(!broadcastSettings.soundEnabled);
+replayRevealBtn.onclick = () => {
+  const latestPick = allPicks[allPicks.length - 1];
+  if (!latestPick) return;
+  toggleSettingsPanel(false);
+  queueReveal(latestPick);
+};
+renderBroadcastSettings();
+function soundPickReveal(pick) {
+  const motif = PICK_MOTIFS[(pick?.player?.position || "").toUpperCase()] || [392, 587, 784];
+  const type = ["triangle", "sine", "sawtooth"][Number(pick?.pick_no || 0) % 3];
+  playTone(motif, { type, spacing: 0.075, dur: 0.46, gain: type === "sawtooth" ? 0.11 : 0.18 });
+}
+function soundOnClock(clock) {
+  const root = 610 + (Number(clock?.pick_no || 0) % 5) * 22;
+  playTone([root], { type: "sine", dur: 0.16, gain: 0.12 });
+}
+function soundTrade()        { playTone([520, 390], { type: "square", spacing: 0.1, dur: 0.3, gain: 0.12 }); }
+function soundClockWarn()    { playTone([880, 880], { type: "square", spacing: 0.14, dur: 0.12, gain: 0.16 }); }
+
+// ==================================================
+// FULLSCREEN / KIOSK
+// ==================================================
+fsbtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
+};
+
+let inactivityTimer;
+function resetInactivity() {
+  controls.classList.remove("hidden");
+  document.body.classList.remove("kiosk");
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(() => {
+    if (document.fullscreenElement) {
+      controls.classList.add("hidden");
+      document.body.classList.add("kiosk");
+    }
+  }, 5000);
+}
+document.addEventListener("mousemove", resetInactivity);
+resetInactivity();
+
+// ==================================================
+// CONFETTI
+// ==================================================
+const canvas = document.getElementById("confetti-canvas");
+const ctx = canvas.getContext("2d");
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener("resize", resize);
+
+// Broadcast-style reveal burst: an expanding shockwave ring, radiating light
+// rays, and a soft rise of glowing embers — tuned to look sharp at full TV
+// scale without ever reading as "party confetti."
+let particles = [];
+let rings = [];
+let flashAlpha = 0;
+let revealAnimationRunning = false;
+let revealBurstToken = 0;
+
+function resetRevealBurst() {
+  revealBurstToken++;
+  particles = [];
+  rings = [];
+  flashAlpha = 0;
+  revealAnimationRunning = false;
+  if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function burstReveal(hex, originY) {
+  if (reduceMotion) return;
+  const token = revealBurstToken;
+  hex = hex || "#ffcc33";
+  const cx = canvas.width / 2;
+  const cy = originY != null ? originY : canvas.height * 0.42;
+  const scale = Math.max(1, canvas.width / 1600); // scale the burst up on bigger TV screens
+
+  flashAlpha = Math.min(flashAlpha + (lowPowerMode ? 0.16 : 0.3), lowPowerMode ? 0.24 : 0.4);
+
+  const ringCount = lowPowerMode ? 1 : 3;
+  for (let i = 0; i < ringCount; i++) {
+    rings.push({ x: cx, y: cy, radius: 6, alpha: 0.85, speed: (13 + i * 5) * scale, lineWidth: 3 * scale, delay: i * 5, color: hex, elapsed: 0 });
+  }
+
+  const rayCount = lowPowerMode ? (canvas.width < 900 ? 10 : 16) : (canvas.width < 900 ? 28 : 54);
+  for (let i = 0; i < rayCount; i++) {
+    const angle = (Math.PI * 2 * i) / rayCount + (Math.random() - 0.5) * 0.12;
+    const speed = (Math.random() * 8 + 7) * scale;
+    particles.push({
+      type: "ray",
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      len: (Math.random() * 22 + 16) * scale,
+      color: i % 3 === 0 ? "#ffffff" : hex,
+      life: 0,
+      maxLife: (lowPowerMode ? 30 : 42) + Math.random() * (lowPowerMode ? 8 : 16)
+    });
+  }
+
+  const emberCount = lowPowerMode ? (canvas.width < 900 ? 6 : 10) : (canvas.width < 900 ? 18 : 40);
+  for (let i = 0; i < emberCount; i++) {
+    particles.push({
+      type: "ember",
+      x: cx + (Math.random() - 0.5) * 460 * scale,
+      y: cy + 70 * scale + Math.random() * 70 * scale,
+      vx: (Math.random() - 0.5) * 1.1,
+      vy: -(Math.random() * 2.4 + 1.3) * scale,
+      size: (Math.random() * 2.6 + 1.6) * scale,
+      color: Math.random() < 0.55 ? hex : "#ffcc33",
+      life: 0,
+      maxLife: (lowPowerMode ? 60 : 110) + Math.random() * (lowPowerMode ? 30 : 70),
+      flicker: Math.random() * Math.PI * 2
+    });
+  }
+  if (!revealAnimationRunning) {
+    revealAnimationRunning = true;
+    requestAnimationFrame(() => animateReveal(token));
+  }
+}
+
+function animateReveal(token = revealBurstToken) {
+  if (reduceMotion) return;
+  if (token !== revealBurstToken) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (flashAlpha > 0) {
+    const g = ctx.createRadialGradient(canvas.width / 2, canvas.height * 0.42, 0, canvas.width / 2, canvas.height * 0.42, canvas.width * 0.55);
+    g.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    flashAlpha *= 0.82;
+    if (flashAlpha < 0.01) flashAlpha = 0;
+  }
+
+  rings = rings.filter((r) => r.alpha > 0.01);
+  rings.forEach((r) => {
+    if (r.delay > 0) { r.delay--; return; }
+    r.radius += r.speed;
+    r.alpha *= 0.945;
+    ctx.save();
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.alpha;
+    ctx.lineWidth = r.lineWidth;
+    ctx.shadowColor = r.color;
+    ctx.shadowBlur = 22;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  particles.forEach((p) => {
+    p.life++;
+    if (p.type === "ray") {
+      const t = p.life / p.maxLife;
+      p.x += p.vx * (1 - t * 0.5);
+      p.y += p.vy * (1 - t * 0.5);
+      const alpha = Math.max(0, 1 - t);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 12;
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      const mag = Math.hypot(p.vx, p.vy) || 1;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - (p.vx / mag) * p.len, p.y - (p.vy / mag) * p.len);
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      p.vy += -0.002;
+      p.x += p.vx + Math.sin(p.life * 0.08 + p.flicker) * 0.4;
+      p.y += p.vy;
+      const t = p.life / p.maxLife;
+      const alpha = Math.max(0, 1 - t) * (0.6 + 0.4 * Math.sin(p.life * 0.3 + p.flicker));
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+  particles = particles.filter((p) => p.life < p.maxLife);
+
+  if (particles.length || rings.length || flashAlpha > 0) {
+    requestAnimationFrame(() => animateReveal(token));
+  } else {
+    revealAnimationRunning = false;
+  }
+}
+
+// ==================================================
+// TIMER
+// ==================================================
+let deadline = null;
+let pickTimerSeconds = 0;
+let lastClockPickNo = null;
+let warnPlayedForPick = null;
+let latestClock = null;
+function tickTimer() {
+  if (!deadline || pickTimerSeconds <= 0) {
+    if (timerRenderKey !== "idle") {
+      timertext.textContent = "--";
+      timerfg.style.strokeDashoffset = CIRC;
+      timerwrap.classList.remove("warn", "critical");
+      document.body.classList.remove("clock-critical");
+      timerRenderKey = "idle";
+    }
+    return;
+  }
+  const remaining = Math.max(0, deadline - Date.now());
+  const secs = Math.ceil(remaining / 1000);
+  const state = secs <= 10 ? "critical" : secs <= 30 ? "warn" : "normal";
+  const criticalEdge = secs <= 5;
+  const nextTimerKey = `${secs}|${state}|${criticalEdge}`;
+  if (nextTimerKey === timerRenderKey) return;
+  timerRenderKey = nextTimerKey;
+
+  timertext.textContent = secs;
+  const frac = Math.max(0, Math.min(1, remaining / (pickTimerSeconds * 1000)));
+  timerfg.style.strokeDashoffset = CIRC * (1 - frac);
+
+  // Three-stage color ramp: plenty of time -> getting close -> urgent.
+  // The last few seconds also get a pulse so it reads from across the room.
+  if (state === "critical") {
+    timerfg.style.stroke = "#e74c3c";
+    timerwrap.classList.add("critical");
+    timerwrap.classList.remove("warn");
+    document.body.classList.toggle("clock-critical", criticalEdge);
+    if (secs <= 5 && warnPlayedForPick !== lastClockPickNo) {
+      warnPlayedForPick = lastClockPickNo;
+      soundClockWarn();
+    }
+  } else if (state === "warn") {
+    timerfg.style.stroke = "#e0a72e";
+    timerwrap.classList.add("warn");
+    timerwrap.classList.remove("critical");
+    document.body.classList.remove("clock-critical");
+  } else {
+    timerfg.style.stroke = "var(--accent)";
+    timerwrap.classList.remove("warn", "critical");
+    document.body.classList.remove("clock-critical");
+  }
+}
+setInterval(tickTimer, 200);
+
+function avatarHtml(avatarId, name) {
+  const initials = (name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  if (avatarId) {
+    return `<img src="https://sleepercdn.com/avatars/thumbs/${avatarId}" onerror="this.parentElement.textContent='${initials}'" />`;
+  }
+  return initials;
+}
+
+function spotlightImageHtml(pick) {
+  const pos = (pick?.player?.position || "").toUpperCase();
+  const team = pick?.player?.team || "";
+  if (pos === "DEF" && team && team.toUpperCase() !== "FA") {
+    const cachedLogo = preloadTeamLogo(team);
+    const logoUrl = cachedLogo?.src || teamLogoUrl(team);
+    return `<img class="def-logo" src="${logoUrl}" alt="" decoding="async" onerror="this.parentElement.textContent='${escapeHtml(team)}'" />`;
+  }
+
+  const playerId = pick?.player?.id;
+  if (!playerId) return "NFL";
+  const cached = preloadHeadshot(playerId);
+  return `<img src="${cached?.src || playerHeadshotUrl(playerId)}" alt="" decoding="async" onerror="this.parentElement.textContent='NFL'" />`;
+}
+
+function positionBadge(pos) {
+  const p = (pos || "").toUpperCase();
+  return `<span class="badge ${p}">${p || "?"}</span>`;
+}
+
+// ==================================================
+// CLOCK
+// ==================================================
+function renderClock(clock) {
+  latestClock = clock;
+  draftStatus = clock.draft_status || draftStatus;
+  const clockTeamName = clock.on_clock || "-";
+  const clockOwnerName = clock.on_clock_owner || clock.on_clock || "-";
+  const totalPicks = clock.rounds ? clock.teams * clock.rounds : "?";
+  const nextClockRenderKey = [
+    clockTeamName,
+    clockOwnerName,
+    clock.on_clock_avatar || "",
+    clock.pick_no,
+    totalPicks,
+    clock.round,
+    clock.teams,
+    clock.rounds
+  ].join("|");
+  if (nextClockRenderKey !== clockRenderKey) {
+    clockRenderKey = nextClockRenderKey;
+    onclockname.textContent = clockTeamName;
+    onclockowner.textContent = clockOwnerName !== clockTeamName ? clockOwnerName : "";
+    onclockavatar.innerHTML = avatarHtml(clock.on_clock_avatar, clockOwnerName);
+    pickcounter.textContent = `Pick ${clock.pick_no} of ${totalPicks}`;
+    roundcounter.textContent = `Round ${clock.round}`;
+  }
+  currentTeams = clock.teams;
+  currentRounds = clock.rounds;
+  deadline = clock.deadline;
+  pickTimerSeconds = clock.pick_timer || 0;
+  if (lastClockPickNo !== null && clock.pick_no !== lastClockPickNo) {
+    soundOnClock(clock);
+    warnPlayedForPick = null;
+    const onclockEl = document.getElementById("onclock");
+    onclockEl.classList.remove("clock-change");
+    void onclockEl.offsetWidth;
+    onclockEl.classList.add("clock-change");
+    setTimeout(() => onclockEl.classList.remove("clock-change"), 700);
+  }
+  lastClockPickNo = clock.pick_no;
+  tickTimer();
+  renderGrid();
+  renderTeamView();
+  maybeRunDraftOrderReveal();
+}
+
+// ==================================================
+// REVEAL SEQUENCE: flash -> cinematic card -> hold -> next
+// Skippable with ArrowRight / Space.
+// ==================================================
+let revealQueue = [];
+let revealing = false;
+let revealStage = null; // 'flash' | 'card' | null
+let revealTimer = null;
+let pendingRecapPicks = null;
+let revealToken = 0;
+let orderRevealTimers = [];
+let currentRevealPick = null;
+
+const PICK_CALL_DURATION = 850;
+const FAST_PICK_CALL_DURATION = 260;
+const CARD_DURATION = 4250;
+const FAST_CARD_DURATION = 1150;
+const MAX_REVEAL_BACKLOG = 5;
+
+// ==================================================
+// DRAFT ORDER REVEAL (pre-draft filler, plays once)
+// ==================================================
+let draftOrderRevealed = false;
+function maybeRunDraftOrderReveal() {
+  if (draftOrderRevealed) return;
+  if (allPicks.length > 0 || !teamsOrder.length || revealing) return;
+  if (!["drafting", "paused"].includes(draftStatus)) return;
+  draftOrderRevealed = true;
+
+  showSpotlight();
+  spotlight.classList.remove("sweep");
+  const perChip = 150;
+  let html = `<div id="orderreveal"><div class="orlabel">Draft Order</div><div class="orlist">`;
+  teamsOrder.forEach((t, i) => {
+    const ownerName = t.owner_name || t.name;
+    html += `<div class="orchip" style="animation-delay:${((i * perChip) / 1000).toFixed(2)}s">
+      <span class="orpick">${i + 1}</span>
+      <div class="avatar">${avatarHtml(t.avatar, ownerName)}</div>
+      <span class="orname">${escapeHtml(t.name || ownerName)}</span>
+    </div>`;
+  });
+  html += `</div></div>`;
+  card.innerHTML = html;
+
+  clearOrderRevealTimers();
+  teamsOrder.forEach((_, i) => {
+    orderRevealTimers.push(setTimeout(soundOnClock, 200 + i * perChip));
+  });
+
+  const totalTime = 200 + teamsOrder.length * perChip + 2400;
+  orderRevealTimers.push(setTimeout(() => { if (!revealing) showRestingView(); }, totalTime));
+}
+
+function queueReveal(pick) {
+  clearOrderRevealTimers();
+  revealQueue.push(pick);
+  if (broadcastSettings.mockDraftMode && revealQueue.length > MAX_REVEAL_BACKLOG) {
+    revealQueue = revealQueue.slice(-MAX_REVEAL_BACKLOG);
+  }
+  if (!revealing) processRevealQueue();
+}
+
+function processRevealQueue() {
+  clearRevealTimer();
+  if (revealQueue.length === 0) {
+    revealing = false;
+    revealStage = null;
+    currentRevealPick = null;
+    skiphint.classList.remove("show");
+    resetRevealMotion();
+    showRestingView();
+    if (pendingRecapPicks) {
+      const picks = pendingRecapPicks;
+      pendingRecapPicks = null;
+      showRecap(picks);
+      return;
+    }
+    return;
+  }
+  resetRevealMotion();
+  revealing = true;
+  const pick = revealQueue.shift();
+  currentRevealPick = pick;
+  const token = ++revealToken;
+  runPickCallStage(pick, revealQueue.length, token);
+}
+
+function isMockCatchUp(backlog) {
+  return broadcastSettings.mockDraftMode && backlog > 1;
+}
+
+function applyRevealTheme(pick) {
+  const pos = (pick?.player?.position || "").toUpperCase();
+  const posHex = POS_HEX[pos] || "#ffcc33";
+  const theme = teamTheme(pick?.player?.team);
+  spotlight.style.setProperty("--pos-color", posHex);
+  spotlight.style.setProperty("--pos-glow", hexToRgba(posHex, 0.32));
+  spotlight.style.setProperty("--team-primary", theme.primary);
+  spotlight.style.setProperty("--team-secondary", theme.secondary);
+  spotlight.style.setProperty("--team-primary-text", theme.primaryText);
+  spotlight.style.setProperty("--team-secondary-text", theme.secondaryText);
+  spotlight.style.setProperty("--team-secondary-ink", theme.secondaryInk);
+  spotlight.style.setProperty("--team-glow", theme.glow);
+  spotlight.style.setProperty("--team-soft", theme.soft);
+  spotlight.classList.remove("motion-a", "motion-b", "motion-c");
+  spotlight.classList.add(["motion-a", "motion-b", "motion-c"][Number(pick?.pick_no || 0) % 3]);
+  return theme;
+}
+
+function runPickCallStage(pick, backlog, token) {
+  revealStage = "signal";
+  const catchUp = isMockCatchUp(backlog);
+  spotlight.classList.toggle("catch-up", catchUp);
+  skiphint.classList.add("show");
+  showSpotlight();
+  primePickAssets([pick]);
+  applyRevealTheme(pick);
+  pickribbon.classList.remove("reveal");
+  draftedby.classList.remove("reveal");
+  draftedby.innerHTML = "";
+  logopattern.classList.remove("reveal");
+  const teamName = pick.team_name || pick.team_owner || `Team ${pick.draft_slot || ""}`;
+  const ownerName = pick.team_owner || pick.team_username || teamName;
+  card.innerHTML = `<div id="pickcall">
+    <div class="pickcall-eyebrow">Round ${escapeHtml(pick.round)} &middot; Pick ${escapeHtml(pick.pick_no)}</div>
+    <div class="pickcall-title">The Pick Is In</div>
+    <div class="pickcall-team">
+      <div class="avatar">${avatarHtml(pick.team_avatar, ownerName)}</div>
+      <div><div class="pickcall-team-name">${escapeHtml(teamName)}</div></div>
+    </div>
+  </div>`;
+  soundPickIncoming(pick);
+  revealTimer = setTimeout(() => {
+    if (token === revealToken) beginPlayerTransition(pick, backlog, token);
+  }, catchUp ? FAST_PICK_CALL_DURATION : PICK_CALL_DURATION);
+}
+
+function beginPlayerTransition(pick, backlog, token) {
+  const catchUp = isMockCatchUp(backlog);
+  revealStage = "transition";
+  const pickCall = document.getElementById("pickcall");
+  if (pickCall) pickCall.classList.add("handoff");
+  transitionveil.classList.remove("active");
+  void transitionveil.offsetWidth;
+  transitionveil.classList.add("active");
+  revealTimer = setTimeout(() => {
+    if (token === revealToken) runCardStage(pick, backlog, token);
+  }, catchUp ? 90 : 285);
+}
+
+function runCardStage(pick, backlog = 0, token = revealToken) {
+  revealStage = "card";
+  const catchUp = isMockCatchUp(backlog);
+  spotlight.classList.toggle("catch-up", catchUp);
+  skiphint.classList.add("show");
+  showSpotlight();
+  renderSpotlight(pick, true);
+  soundPickReveal(pick);
+  const duration = catchUp ? FAST_CARD_DURATION : CARD_DURATION;
+  revealTimer = setTimeout(() => {
+    if (token === revealToken) processRevealQueue();
+  }, duration);
+}
+
+function skipReveal() {
+  if (!revealing) return;
+  ++revealToken;
+  clearRevealTimer();
+  processRevealQueue();
+}
+
+function clearRevealTimer() {
+  if (revealTimer) clearTimeout(revealTimer);
+  revealTimer = null;
+}
+
+function clearOrderRevealTimers() {
+  orderRevealTimers.forEach(clearTimeout);
+  orderRevealTimers = [];
+}
+
+function resetRevealMotion() {
+  spotlight.classList.remove("sweep");
+  spotlight.classList.remove("catch-up");
+  logopattern.classList.remove("reveal");
+  pickribbon.classList.remove("reveal");
+  draftedby.classList.remove("reveal");
+  transitionveil.classList.remove("active");
+  resetRevealBurst();
+}
+
+function renderLogoPattern(team, animate) {
+  const cached = preloadTeamLogo(team);
+  const logo = cached?.src || teamLogoUrl(team);
+  logopattern.classList.remove("reveal");
+  if (!logo) {
+    logopattern.style.removeProperty("--team-logo-layer");
+    logopattern.dataset.team = "";
+    return;
+  }
+  if (logopattern.dataset.team === (team || "").toUpperCase()) {
+    requestAnimationFrame(() => logopattern.classList.add("reveal"));
+    return;
+  }
+  logopattern.style.setProperty("--team-logo-layer", `url("${logo}")`);
+  logopattern.dataset.team = (team || "").toUpperCase();
+  requestAnimationFrame(() => logopattern.classList.add("reveal"));
+}
+
+function splitPlayerName(name) {
+  const parts = String(name || "Unknown Player").trim().split(/\s+/);
+  if (parts.length === 1) return { first: "", last: parts[0] };
+  return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
+}
+
+function slotForPickNo(pickNo, teams) {
+  const round = Math.ceil(pickNo / teams);
+  const posInRound = ((pickNo - 1) % teams) + 1;
+  return { round, slot: round % 2 === 1 ? posInRound : teams - posInRound + 1 };
+}
+
+function upcomingAfterPick(pick, count = 4) {
+  const teams = Number(currentTeams || latestClock?.teams || teamsOrder.length || 12);
+  const rounds = Number(currentRounds || latestClock?.rounds || 0);
+  const totalPicks = rounds ? rounds * teams : null;
+  const rows = [];
+  const firstNextPick = Number(pick?.pick_no || allPicks.length || 0) + 1;
+  if (!teams || firstNextPick <= 1) return rows;
+  for (let pickNo = firstNextPick; rows.length < count; pickNo++) {
+    if (totalPicks && pickNo > totalPicks) break;
+    const s = slotForPickNo(pickNo, teams);
+    const team = teamsOrder.find((t) => Number(t.slot) === Number(s.slot));
+    rows.push({
+      pick_no: pickNo,
+      slot: s.slot,
+      owner: team?.name || team?.owner_name || `Team ${s.slot}`
+    });
+  }
+  return rows;
+}
+
+function pickPosition(pick) {
+  return (pick?.player?.position || "").toUpperCase();
+}
+
+function synergyForPick(pick, history = allPicks) {
+  const nflTeam = (pick?.player?.team || "").toUpperCase();
+  if (!nflTeam || nflTeam === "FA") return null;
+  const sameRosterBeforePick = history.filter((p) =>
+    p.pick_no < pick.pick_no &&
+    Number(p.draft_slot) === Number(pick.draft_slot) &&
+    (p.player.team || "").toUpperCase() === nflTeam
+  );
+  if (!sameRosterBeforePick.length) return null;
+
+  const pos = pickPosition(pick);
+  const stackMate = sameRosterBeforePick.find((p) => {
+    const otherPos = pickPosition(p);
+    return (pos === "QB" && ["WR", "TE"].includes(otherPos)) || (["WR", "TE"].includes(pos) && otherPos === "QB");
+  });
+  if (stackMate) {
+    const qb = pos === "QB" ? pick : stackMate;
+    const catcher = pos === "QB" ? stackMate : pick;
+    return {
+      type: "stack",
+      label: "Stack Alert",
+      main: `${qb.player.name} + ${catcher.player.name}`,
+      sub: `${nflTeam} QB/pass-catcher stack`
+    };
+  }
+
+  const handcuffMate = pos === "RB" ? sameRosterBeforePick.find((p) => pickPosition(p) === "RB") : null;
+  if (handcuffMate) {
+    return {
+      type: "handcuff",
+      label: "Handcuff Watch",
+      main: `${pick.player.name} + ${handcuffMate.player.name}`,
+      sub: `${nflTeam} backfield protection`
+    };
+  }
+
+  if (sameRosterBeforePick.length >= 2) {
+    return {
+      type: "core",
+      label: "Team Core",
+      main: `${sameRosterBeforePick.length + 1} ${nflTeam} players`,
+      sub: "Same-team core is building"
+    };
+  }
+
+  const mate = sameRosterBeforePick[0];
+  return {
+    type: "pair",
+    label: "Teammate Pair",
+    main: `${pick.player.name} + ${mate.player.name}`,
+    sub: `${nflTeam} teammate pair`
+  };
+}
+
+function sameDraftingTeam(a, b) {
+  if (a?.roster_id != null && b?.roster_id != null) return Number(a.roster_id) === Number(b.roster_id);
+  return Number(a?.draft_slot) === Number(b?.draft_slot);
+}
+
+function teamBuildForPick(pick) {
+  const positions = ["QB", "RB", "WR", "TE", "K", "DEF"];
+  const colors = { ...POS_HEX, FLEX: "#95a5a6" };
+  const teamPicks = allPicks
+    .filter((row) => Number(row.pick_no) <= Number(pick.pick_no) && sameDraftingTeam(row, pick))
+    .sort((a, b) => Number(a.pick_no) - Number(b.pick_no));
+  const counts = Object.fromEntries(positions.map((pos) => [pos, 0]));
+  teamPicks.forEach((row) => {
+    const pos = pickPosition(row);
+    if (pos in counts) counts[pos]++;
+  });
+  const total = teamPicks.length || 1;
+  const ranked = positions.map((pos) => ({ pos, count: counts[pos] })).sort((a, b) => b.count - a.count);
+  const leader = ranked[0];
+  const used = ranked.filter((row) => row.count > 0).length;
+  const untouched = positions.length - used;
+  const format = leagueFormat();
+  const coverage = lineupCoverage(teamPicks);
+  let identity = "Build taking shape";
+  if (teamPicks.length === 1) identity = `Starting at ${leader.pos}`;
+  else if (used === 1) identity = `${leader.pos}-only start`;
+  else if (leader.count / teamPicks.length >= 0.5) identity = `${leader.pos}-heavy build`;
+  else if (["QB", "RB", "WR", "TE"].every((pos) => counts[pos] > 0)) identity = "Core positions covered";
+  else identity = "Balanced build";
+  if (coverage.open.length) identity = `${coverage.filled}/${coverage.total} starters filled`;
+  else if (coverage.total) identity = "Starting lineup covered";
+
+  const countHtml = positions.map((pos) => `
+    <div class="comp-item${counts[pos] ? "" : " zero"}" style="--comp-color:${colors[pos]}">
+      <span class="comp-pos">${pos}</span><span class="comp-count">${counts[pos]}</span>
+    </div>`).join("");
+  const barHtml = positions.filter((pos) => counts[pos] > 0)
+    .map((pos) => `<span style="flex:${counts[pos]};background:${colors[pos]}" title="${pos}: ${counts[pos]}"></span>`).join("");
+  const rookieCount = teamPicks.filter((row) => row.player.is_rookie).length;
+  const veteranCount = teamPicks.filter((row) => row.player.is_veteran).length;
+  const experienceHtml = rookieCount || veteranCount ? `<div class="experience-summary">
+    ${rookieCount ? `<span class="experience-pill rookie">${rookieCount} Rookie${rookieCount === 1 ? "" : "s"}</span>` : ""}
+    ${veteranCount ? `<span class="experience-pill veteran">${veteranCount} Veteran${veteranCount === 1 ? "" : "s"}</span>` : ""}
+  </div>` : "";
+  const maxVisiblePicks = 5;
+  const recentPickCount = maxVisiblePicks - 1;
+  const earlierPickCount = teamPicks.length > maxVisiblePicks ? teamPicks.length - recentPickCount : 0;
+  const visiblePath = earlierPickCount ? teamPicks.slice(-recentPickCount) : teamPicks;
+  const pathHtml = visiblePath.map((row, index) => {
+    const pos = pickPosition(row) || "?";
+    const isCurrent = index === visiblePath.length - 1;
+    return `<span class="path-chip${isCurrent ? " current" : ""}" style="--chip-color:${colors[pos] || colors.FLEX}" title="Round ${escapeHtml(row.round)} · ${escapeHtml(row.player.name)}">${escapeHtml(pos)}</span>`;
+  }).join("");
+  const earlierHtml = earlierPickCount
+    ? `<span class="path-chip earlier" title="${earlierPickCount} earlier pick${earlierPickCount === 1 ? "" : "s"}">+${earlierPickCount}</span>`
+    : "";
+  return `<div class="team-build">
+    <div class="build-head"><div><div class="build-label">Team composition</div><div class="build-sub">${teamPicks.length} pick${teamPicks.length === 1 ? "" : "s"} · ${escapeHtml(format.short)}</div></div><div class="build-identity">${escapeHtml(identity)}</div></div>
+    <div class="comp-grid">${countHtml}</div>
+    <div class="comp-bar">${barHtml}</div>
+    ${experienceHtml}
+    <div class="build-path"><span class="path-label">Draft path</span>${earlierHtml}${pathHtml}</div>
+  </div>`;
+}
+
+function playerDossierMarkup(pick, cls = "") {
+  const player = pick.player || {};
+  const facts = [];
+  if (typeof pick.adp === "number") facts.push({ label: "Market", value: `ADP #${Math.round(pick.adp)}`, tone: "market" });
+  if (typeof player.age === "number") facts.push({ label: "Age", value: String(player.age) });
+  if (typeof player.years_exp === "number") facts.push({ label: "Experience", value: player.years_exp === 0 ? "Rookie" : `${player.years_exp} yr${player.years_exp === 1 ? "" : "s"}` });
+  if (typeof player.depth_chart_order === "number" && player.depth_chart_order > 0) facts.push({ label: "Depth chart", value: `${player.position || ""}${player.depth_chart_order}` });
+  if (player.injury_status) facts.push({ label: "Status", value: player.injury_status, tone: "alert" });
+  else if (player.number != null && player.number !== "") facts.push({ label: "Jersey", value: `#${player.number}` });
+  return facts.slice(0, 4).length ? `<div id="player-dossier">${facts.slice(0, 4).map((fact) => `<div class="dossier-fact ${fact.tone || ""}${cls}"><div class="dossier-label">${escapeHtml(fact.label)}</div><div class="dossier-value">${escapeHtml(fact.value)}</div></div>`).join("")}</div>` : "";
+}
+
+function renderSpotlight(pick, animate) {
+  primePickAssets([pick]);
+  const cls = animate ? " reveal" : "";
+  const pos = (pick.player.position || "").toUpperCase();
+  const posHex = POS_HEX[pos] || "#ffcc33";
+  const theme = teamTheme(pick.player.team);
+  spotlight.style.setProperty("--pos-color", posHex);
+  spotlight.style.setProperty("--pos-glow", hexToRgba(posHex, 0.32));
+  spotlight.style.setProperty("--team-primary", theme.primary);
+  spotlight.style.setProperty("--team-secondary", theme.secondary);
+  spotlight.style.setProperty("--team-primary-text", theme.primaryText);
+  spotlight.style.setProperty("--team-secondary-text", theme.secondaryText);
+  spotlight.style.setProperty("--team-secondary-ink", theme.secondaryInk);
+  spotlight.style.setProperty("--team-glow", theme.glow);
+  spotlight.style.setProperty("--team-soft", theme.soft);
+  renderLogoPattern(pick.player.team, animate);
+
+  const nm = splitPlayerName(pick.player.name);
+  const logo = preloadTeamLogo(pick.player.team)?.src || teamLogoUrl(pick.player.team);
+  const synergy = synergyForPick(pick);
+  const cards = [];
+  if (pick.player.is_rookie) cards.push(`<div class="player-stat-card rookie-card${cls}"><div class="rookie-mark">R</div><div><div class="stat-label">First Year</div><div class="stat-value">Rookie</div></div></div>`);
+  else if (pick.player.is_veteran) cards.push(`<div class="player-stat-card veteran-card${cls}"><div class="veteran-mark">V</div><div><div class="stat-label">NFL Experience</div><div class="stat-value">Veteran</div></div></div>`);
+
+  pickribbon.classList.remove("reveal");
+  pickribbon.innerHTML = `ROUND ${pick.round} &nbsp;•&nbsp; PICK ${pick.pick_no}`;
+  card.innerHTML = `
+    <div id="playerinfo">
+      <div id="playername" class="${cls}"><span class="name-first">${escapeHtml(nm.first)}</span><span class="name-last">${escapeHtml(nm.last)}</span></div>
+      <div id="player-divider" class="${cls}"></div>
+      <div id="meta" class="${cls}">
+        ${positionBadge(pick.player.position)}
+        ${logo ? `<img id="nfl-logo-small" src="${logo}" alt="" decoding="async">` : ""}
+        <span id="nflteam">${escapeHtml(pick.player.team || "FA")}</span>
+      </div>
+      ${cards.length ? `<div id="playercards">${cards.join("")}</div>` : ""}
+      ${playerDossierMarkup(pick, cls)}
+      ${pick.player.is_rookie && pick.player.college ? `<div id="college-line" class="${cls}"><span class="college-icon">U</span><span><span class="college-label">College</span><span class="college-name">${escapeHtml(pick.player.college)}</span></span></div>` : ""}
+      ${synergy ? `<div id="synergy-callout" class="${cls}"><div class="syn-label">${escapeHtml(synergy.label)}</div><div class="syn-main">${escapeHtml(synergy.main)}</div><div class="syn-sub">${escapeHtml(synergy.sub)}</div></div>` : ""}
+    </div>
+    <div id="herowrap"><div id="photostage">
+      <div id="beams" class="${cls}"></div><div id="orbit1" class="orbit${cls}"></div><div id="orbit2" class="orbit${cls}"></div><div id="orbit3" class="orbit${cls}"></div><div id="orbitdots" class="${cls}"></div><div id="pulsering" class="${cls}"></div>
+      <div id="headshot" class="${cls}">${spotlightImageHtml(pick)}</div>
+    </div></div>`;
+
+  const draftedTeamName = pick.team_name || pick.team_owner || `Team ${pick.draft_slot || ""}`;
+  const ownerName = pick.team_owner || pick.team_username || draftedTeamName;
+  const buildHtml = broadcastSettings.showTeamBuild ? teamBuildForPick(pick) : "";
+  draftedby.classList.remove("reveal");
+  draftedby.innerHTML = `
+    <div class="selection-heading"><div class="avatar">${avatarHtml(pick.team_avatar, ownerName)}</div><div class="selection-team">${escapeHtml(draftedTeamName)}</div></div>
+    <div class="selection-pick">Round ${escapeHtml(pick.round)} &middot; Pick ${escapeHtml(pick.pick_no)}</div>
+    ${buildHtml}`;
+
+  if (animate) {
+    void pickribbon.offsetWidth;
+    pickribbon.classList.add("reveal");
+    draftedby.classList.add("reveal");
+    burstReveal(theme.primary);
+    spotlight.classList.add("sweep");
+  }
+}
+
+function showSpotlight() {
+  clearTimeout(spotlightDormantTimer);
+  spotlight.classList.remove("dormant");
+  spotlight.classList.add("active");
+  startRevealPerformanceMonitor();
+  gridview.classList.remove("active");
+  teamview.classList.remove("active");
+}
+
+function invalidateBoardViews() {
+  gridRenderKey = "";
+  teamRenderKey = "";
+}
+
+function showRestingView() {
+  spotlight.classList.remove("active");
+  clearTimeout(spotlightDormantTimer);
+  spotlightDormantTimer = setTimeout(() => {
+    if (!spotlight.classList.contains("active")) spotlight.classList.add("dormant");
+  }, 520);
+  if (viewMode === "teams") {
+    teamview.classList.add("active");
+    gridview.classList.remove("active");
+    renderTeamView();
+  } else {
+    gridview.classList.add("active");
+    teamview.classList.remove("active");
+    renderGrid();
+  }
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  gridbtn.classList.toggle("active", mode === "grid");
+  teamsbtn.classList.toggle("active", mode === "teams");
+  if (!revealing) showRestingView();
+}
+gridbtn.onclick = () => setViewMode("grid");
+teamsbtn.onclick = () => setViewMode("teams");
+setViewMode("grid");
+
+function applyTeamsOrder(nextTeamsOrder, nextClock) {
+  teamsOrder = nextTeamsOrder || teamsOrder;
+  invalidateBoardViews();
+  if (nextClock) {
+    renderClock(nextClock);
+  } else {
+    renderGrid();
+    renderTeamView();
+  }
+}
+
+// ---------- grid zoom (helps deep drafts fit / stay readable on a TV) ----------
+const ZOOM_LEVELS = [1, 0.85, 0.7, 1.15];
+let zoomIndex = 0;
+function applyGridZoom() {
+  const z = ZOOM_LEVELS[zoomIndex];
+  grid.style.zoom = z;
+  zoombtn.textContent = `🔍 ${Math.round(z * 100)}%`;
+}
+zoombtn.onclick = () => { zoomIndex = (zoomIndex + 1) % ZOOM_LEVELS.length; applyGridZoom(); };
+applyGridZoom();
+
+recapTeamsBtn.onclick = () => {
+  recapMode = "teams";
+  renderRecap();
+};
+recapLineupsBtn.onclick = () => {
+  recapMode = "lineups";
+  renderRecap();
+};
+recapBoardBtn.onclick = () => {
+  recapMode = "board";
+  renderRecap();
+};
+recapZoomBtn.onclick = () => {
+  recapZoomIndex = (recapZoomIndex + 1) % ZOOM_LEVELS.length;
+  recapZoomBtn.textContent = `Zoom ${Math.round(ZOOM_LEVELS[recapZoomIndex] * 100)}%`;
+  renderRecap();
+};
+
+// ---------- keyboard shortcuts ----------
+document.addEventListener("keydown", (e) => {
+  if (e.target === usernameInput || e.target === draftIdInput) return;
+  if (e.key === "Escape" && settingspanel.classList.contains("show")) {
+    toggleSettingsPanel(false);
+  } else if (e.key === "ArrowRight" || e.code === "Space") {
+    e.preventDefault();
+    skipReveal();
+  } else if (e.key.toLowerCase() === "g") {
+    if (completeOverlay.classList.contains("show")) recapBoardBtn.click();
+    else setViewMode("grid");
+  } else if (e.key.toLowerCase() === "t") {
+    if (completeOverlay.classList.contains("show")) recapTeamsBtn.click();
+    else setViewMode("teams");
+  } else if (e.key.toLowerCase() === "l") {
+    if (completeOverlay.classList.contains("show")) recapLineupsBtn.click();
+  } else if (e.key.toLowerCase() === "z") {
+    if (completeOverlay.classList.contains("show")) recapZoomBtn.click();
+    else zoombtn.click();
+  } else if (e.key.toLowerCase() === "f") {
+    fsbtn.click();
+  } else if (e.key.toLowerCase() === "m") {
+    soundbtn.click();
+  }
+});
+
+// ==================================================
+// TICKER
+// ==================================================
+function tickerExperienceTag(pick) {
+  if (pick?.player?.is_rookie) return '<span class="rk">R</span>';
+  if (pick?.player?.is_veteran) return '<span class="vt">VET</span>';
+  return "";
+}
+
+function tickerLine(pick, history = allPicks) {
+  const synergy = synergyForPick(pick, history);
+  if (synergy && synergy.type !== "pair") {
+    return `<span class="p">R${pick.round}.${pick.pick_no}</span> <span class="syn">${escapeHtml(synergy.label)}</span> <b>${escapeHtml(pick.team_name || pick.team_owner)}</b> · ${escapeHtml(synergy.main)}${tickerExperienceTag(pick)}`;
+  }
+  return `<span class="p">R${pick.round}.${pick.pick_no}</span> <b>${escapeHtml(pick.team_name || pick.team_owner)}</b> → ${escapeHtml(pick.player.name)} (${escapeHtml(pick.player.position || "")})${tickerExperienceTag(pick)}`;
+}
+
+function addToTicker(pick) {
+  if (ticker.dataset.seeded !== "1") { ticker.innerHTML = ""; ticker.dataset.seeded = "1"; }
+  const el = document.createElement("span");
+  el.className = "item";
+  el.innerHTML = tickerLine(pick, allPicks.filter((p) => p.pick_no < pick.pick_no));
+  ticker.prepend(el);
+  while (ticker.children.length > 12) ticker.removeChild(ticker.lastChild);
+}
+
+function seedTicker(picks) {
+  ticker.innerHTML = "";
+  ticker.dataset.seeded = "1";
+  if (picks.length === 0) {
+    ticker.innerHTML = '<span class="item">Recent picks will appear here...</span>';
+    return;
+  }
+  [...picks].slice(-12).reverse().forEach((pick) => {
+    const el = document.createElement("span");
+    el.className = "item";
+    el.innerHTML = tickerLine(pick, picks);
+    ticker.appendChild(el);
+  });
+}
+
+// ==================================================
+// GRID VIEW
+// ==================================================
+function pickNoForRoundSlot(round, slot, teams) {
+  return round % 2 === 1 ? (round - 1) * teams + slot : (round - 1) * teams + (teams - slot + 1);
+}
+
+function gridCellFlags(pick) {
+  let html = "";
+  if (pick.player.is_rookie) html += `<span class="gtag rookie">R</span>`;
+  else if (pick.player.is_veteran) html += `<span class="gtag veteran">VET</span>`;
+  return html ? `<div class="gflags">${html}</div>` : "";
+}
+
+function headerCellHtml(t) {
+  const teamName = t.name || t.owner_name || `Team ${t.slot}`;
+  const ownerName = t.owner_name || teamName;
+  return `<div class="gcell header">
+    <div class="avatar" style="width:28px;height:28px;font-size:11px;">${avatarHtml(t.avatar, ownerName)}</div>
+    <div class="headertext">
+      <div class="hname">${escapeHtml(teamName)}</div>
+      ${ownerName !== teamName ? `<div class="howner">${escapeHtml(ownerName)}</div>` : ""}
+      <div class="hteam">Pick ${escapeHtml(t.slot)}</div>
+    </div>
+  </div>`;
+}
+
+function teamsRenderSignature() {
+  return teamsOrder
+    .map((t) => `${t.slot}:${t.owner_name || t.name}:${t.avatar || ""}`)
+    .join("|");
+}
+
+function renderGrid() {
+  if (!gridview.classList.contains("active")) return;
+  if (!teamsOrder.length || !currentRounds) {
+    if (gridRenderKey === "empty") return;
+    grid.innerHTML = '<div style="padding:40px; color: var(--text-dim); font-size: 20px;">Grid will populate once the draft order is known...</div>';
+    gridRenderKey = "empty";
+    return;
+  }
+  const cols = teamsOrder.length;
+  const nextPickNo = allPicks.length + 1;
+  const nextKey = `${allPicks.length}|${nextPickNo}|${currentRounds}|${teamsRenderSignature()}`;
+  if (nextKey === gridRenderKey) return;
+  gridRenderKey = nextKey;
+  const pickByNo = new Map(allPicks.map((p) => [p.pick_no, p]));
+
+  grid.style.gridTemplateColumns = `50px repeat(${cols}, minmax(130px, 1fr))`;
+  let html = `<div class="gcell roundlabel header"></div>`;
+  teamsOrder.forEach((t) => { html += headerCellHtml(t); });
+
+  for (let round = 1; round <= currentRounds; round++) {
+    html += `<div class="gcell roundlabel">R${round}</div>`;
+    for (let slot = 1; slot <= cols; slot++) {
+      const pickNo = pickNoForRoundSlot(round, slot, cols);
+      const pick = pickByNo.get(pickNo);
+      const isCurrent = pickNo === nextPickNo;
+      if (pick) {
+        const color = POS_COLORS[pick.player.position] || "#555";
+        html += `<div class="gcell filled${isCurrent ? " current" : ""}${pick.pick_no === allPicks.length ? " latest" : ""}">
+          <div class="gplayer">${escapeHtml(pick.player.name)}</div>
+          <div class="gpos" style="background:${color}">${escapeHtml(pick.player.position || "")}</div>
+          ${gridCellFlags(pick)}
+        </div>`;
+      } else {
+        html += `<div class="gcell${isCurrent ? " current" : ""}"></div>`;
+      }
+    }
+  }
+  grid.innerHTML = html;
+
+  const currentEl = grid.querySelector(".current");
+  if (currentEl) currentEl.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ==================================================
+// TEAM ROSTER VIEW
+// ==================================================
+function renderTeamView() {
+  if (!teamview.classList.contains("active")) return;
+  if (!teamsOrder.length) {
+    if (teamRenderKey === "empty") return;
+    teamgrid.innerHTML = '<div style="padding:40px; color: var(--text-dim); font-size: 20px;">Team rosters will populate once the draft order is known...</div>';
+    teamRenderKey = "empty";
+    return;
+  }
+  const nextKey = `${allPicks.length}|${teamsRenderSignature()}`;
+  if (nextKey === teamRenderKey) return;
+  teamRenderKey = nextKey;
+
+  const bySlot = new Map();
+  teamsOrder.forEach((t) => bySlot.set(t.slot, []));
+  allPicks.forEach((p) => {
+    if (!bySlot.has(p.draft_slot)) bySlot.set(p.draft_slot, []);
+    bySlot.get(p.draft_slot).push(p);
+  });
+
+  let html = "";
+  const onClockSlot = latestClock?.pick_no ? slotForPickNo(latestClock.pick_no, currentTeams).slot : null;
+  teamsOrder.forEach((t) => {
+    const picks = bySlot.get(t.slot) || [];
+    const rookieCount = picks.filter((pick) => pick.player.is_rookie).length;
+    const veteranCount = picks.filter((pick) => pick.player.is_veteran).length;
+    const byPos = {};
+    picks.forEach((p) => {
+      const pos = p.player.position || "FLEX";
+      if (!byPos[pos]) byPos[pos] = [];
+      byPos[pos].push(p);
+    });
+    const positions = Object.keys(byPos).sort(
+      (a, b) => (POS_ORDER.indexOf(a) === -1 ? 99 : POS_ORDER.indexOf(a)) - (POS_ORDER.indexOf(b) === -1 ? 99 : POS_ORDER.indexOf(b))
+    );
+
+    let rows = "";
+    if (positions.length === 0) {
+      rows = `<div class="posrow"><span class="posplayers" style="color:var(--text-dim);">No picks yet</span></div>`;
+    } else {
+      positions.forEach((pos) => {
+        const players = byPos[pos]
+          .map((p) => `<span class="ply"><b>${escapeHtml(p.player.name)}</b>${p.player.is_rookie ? '<span class="rk"> R</span>' : p.player.is_veteran ? '<span class="vt"> VET</span>' : ""} (R${p.round})</span>`)
+          .join(", ");
+        rows += `<div class="posrow"><span class="poslabel ${pos}">${pos}</span><span class="posplayers">${players}</span></div>`;
+      });
+    }
+
+    html += `<div class="teamcard${Number(t.slot) === Number(onClockSlot) ? " on-clock" : ""}">
+      <div class="thead">
+        <div class="avatar" style="width:34px;height:34px;font-size:12px;">${avatarHtml(t.avatar, t.owner_name || t.name)}</div>
+        <div>
+          <div class="tname">${escapeHtml(t.name || t.owner_name)}</div>
+          ${t.owner_name && t.owner_name !== t.name ? `<div class="towner">${escapeHtml(t.owner_name)}</div>` : ""}
+          <div class="tuser">T${escapeHtml(t.slot)} · ${picks.length} pick${picks.length === 1 ? "" : "s"}${rookieCount ? ` · ${rookieCount}R` : ""}${veteranCount ? ` · ${veteranCount}V` : ""}</div>
+        </div>
+      </div>
+      <div class="poslist">${rows}</div>
+    </div>`;
+  });
+  teamgrid.innerHTML = html;
+}
+
+// ==================================================
+// TRADE BANNER
+// ==================================================
+function showTrade(trade) {
+  tradebanner.innerHTML = `
+    <div class="tradeicon">🔄</div>
+    <div class="tradetext">
+      <div class="tradelabel">Pick Traded</div>
+      <div class="trademain"><b>${escapeHtml(trade.from)}</b> <span class="tradearrow">→</span> <b>${escapeHtml(trade.to)}</b></div>
+      <div class="tradesub">Round ${trade.round} pick</div>
+    </div>
+  `;
+  tradebanner.classList.remove("show");
+  void tradebanner.offsetWidth; // restart animation
+  tradebanner.classList.add("show");
+  soundTrade();
+  setTimeout(() => tradebanner.classList.remove("show"), 5500);
+}
+
+// ==================================================
+// RECAP
+// ==================================================
+function adpScoreForPick(pick) {
+  return typeof pick.adp_diff === "number" ? -pick.adp_diff : null;
+}
+
+function formatScore(score) {
+  if (typeof score !== "number") return "N/A";
+  const rounded = Math.round(score);
+  return `${rounded > 0 ? "+" : ""}${rounded}`;
+}
+
+function scoreClass(score) {
+  if (typeof score !== "number") return "";
+  return score > 0 ? "value" : score < 0 ? "reach" : "";
+}
+
+function gradeLetter(avgScore) {
+  if (avgScore >= 92) return "A+";
+  if (avgScore >= 86) return "A";
+  if (avgScore >= 80) return "B+";
+  if (avgScore >= 73) return "B";
+  if (avgScore >= 65) return "C+";
+  if (avgScore >= 57) return "C";
+  return "D";
+}
+
+function positionCounts(picks) {
+  return picks.reduce((counts, pick) => {
+    const pos = (pick.player.position || "FLEX").toUpperCase();
+    counts[pos] = (counts[pos] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function leagueRosterSlots() {
+  const supplied = Array.isArray(leagueContext?.roster_positions) ? leagueContext.roster_positions : [];
+  const excluded = new Set(["BN", "BENCH", "IR", "RESERVE", "TAXI"]);
+  if (supplied.some((slot) => !excluded.has(String(slot).toUpperCase()))) {
+    return supplied.map((slot) => String(slot).toUpperCase()).filter((slot) => !excluded.has(slot));
+  }
+  const s = leagueContext?.draft_settings || {};
+  const mapping = [["slots_qb","QB"],["slots_rb","RB"],["slots_wr","WR"],["slots_te","TE"],["slots_flex","FLEX"],["slots_super_flex","SUPER_FLEX"],["slots_rec_flex","REC_FLEX"],["slots_k","K"],["slots_def","DEF"]];
+  const slots = mapping.flatMap(([key, slot]) => Array.from({ length: Math.max(0, Number(s[key]) || 0) }, () => slot));
+  return slots.length ? slots : ["QB","RB","RB","WR","WR","TE","FLEX","DEF","K"];
+}
+
+function slotEligible(slot, pos) {
+  const s = String(slot).toUpperCase();
+  const p = String(pos).toUpperCase();
+  if (s === p) return true;
+  if (["FLEX", "W/R/T", "WRRB_FLEX"].includes(s)) return ["RB","WR","TE"].includes(p);
+  if (["REC_FLEX", "W/T"].includes(s)) return ["WR","TE"].includes(p);
+  if (["SUPER_FLEX", "Q/W/R/T"].includes(s)) return ["QB","RB","WR","TE"].includes(p);
+  return false;
+}
+
+function lineupCoverage(picks) {
+  const slots = leagueRosterSlots().map((slot, index) => ({ slot, index }));
+  const specificity = (slot) => ["SUPER_FLEX","FLEX","W/R/T","WRRB_FLEX","REC_FLEX","W/T"].includes(slot) ? 2 : 1;
+  slots.sort((a, b) => specificity(a.slot) - specificity(b.slot));
+  const pool = [...picks].sort((a, b) => lineupRank(a) - lineupRank(b));
+  const assignments = [];
+  for (const row of slots) {
+    const idx = pool.findIndex((pick) => slotEligible(row.slot, pickPosition(pick)));
+    assignments.push({ ...row, pick: idx >= 0 ? pool.splice(idx, 1)[0] : null });
+  }
+  assignments.sort((a, b) => a.index - b.index);
+  const open = assignments.filter((row) => !row.pick).map((row) => row.slot);
+  return { assignments, bench: pool, open, filled: assignments.length - open.length, total: assignments.length };
+}
+
+function leagueFormat() {
+  const scoring = leagueContext?.scoring_settings || {};
+  const fallback = String(leagueContext?.scoring_type || "").toLowerCase();
+  const ppr = Number.isFinite(Number(scoring.rec)) ? Number(scoring.rec) : fallback === "ppr" ? 1 : fallback.includes("half") ? .5 : 0;
+  const tePremium = Number(scoring.bonus_rec_te || scoring.rec_te || 0);
+  const passTd = Number(scoring.pass_td || 4);
+  const superflex = leagueRosterSlots().some((slot) => ["SUPER_FLEX","Q/W/R/T"].includes(slot));
+  const bonuses = Object.entries(scoring).some(([key, value]) => key.startsWith("bonus_") && Number(value) > 0);
+  const parts = [ppr >= .75 ? "PPR" : ppr >= .25 ? "Half PPR" : "Standard"];
+  if (superflex) parts.push("Superflex");
+  if (tePremium > 0) parts.push("TE premium");
+  if (passTd >= 6) parts.push("6-pt pass TD");
+  return { ppr, tePremium, passTd, superflex, bonuses, short: parts.join(" · "), scoring };
+}
+
+function rosterContextScore(picks, scored = []) {
+  const counts = positionCounts(picks);
+  const format = leagueFormat();
+  const coverage = lineupCoverage(picks);
+  const notes = [];
+  const coverageScore = coverage.total ? 45 * coverage.filled / coverage.total : 0;
+
+  const demanded = ["QB","RB","WR","TE"].filter((pos) => leagueRosterSlots().some((slot) => slotEligible(slot, pos)));
+  const assignedCounts = positionCounts(coverage.assignments.filter((row) => row.pick).map((row) => row.pick));
+  const depthHits = demanded.filter((pos) => (counts[pos] || 0) > (assignedCounts[pos] || 0)).length;
+  const depthScore = demanded.length ? 20 * depthHits / demanded.length : 20;
+
+  const target = { QB:.6, RB:1, WR:1, TE:.5, K:0, DEF:0 };
+  leagueRosterSlots().forEach((slot) => {
+    ["QB","RB","WR","TE","K","DEF"].forEach((pos) => { if (slotEligible(slot, pos)) target[pos] += 1 / (["QB","RB","WR","TE"].filter((p) => slotEligible(slot,p)).length || 1); });
+  });
+  if (format.superflex) target.QB += 1.25;
+  target.WR += format.ppr * 1.2;
+  target.TE += format.tePremium * 1.5;
+  const relevant = ["QB","RB","WR","TE","K","DEF"];
+  const targetTotal = relevant.reduce((sum, pos) => sum + target[pos], 0);
+  const pickTotal = Math.max(1, relevant.reduce((sum, pos) => sum + (counts[pos] || 0), 0));
+  const distance = relevant.reduce((sum, pos) => sum + Math.abs((counts[pos] || 0) / pickTotal - target[pos] / targetTotal), 0) / 2;
+  const allocationScore = 15 * Math.max(0, 1 - distance);
+
+  const avgAdp = scored.length ? scored.reduce((sum, row) => sum + row.score, 0) / scored.length : 0;
+  const valueScore = Math.max(0, Math.min(15, 7.5 + avgAdp * .35));
+  const signals = picks.filter((pick) => synergyForPick(pick, picks)).length;
+  const strategyScore = Math.min(5, signals * 1.5);
+  const score = Math.round(Math.max(0, Math.min(100, coverageScore + depthScore + allocationScore + valueScore + strategyScore)));
+
+  if (coverage.open.length) notes.push(`open starters: ${[...new Set(coverage.open)].join(", ")}`);
+  demanded.forEach((pos) => { if ((counts[pos] || 0) <= (assignedCounts[pos] || 0)) notes.push(`no ${pos} depth`); });
+  if (format.superflex && (counts.QB || 0) < 2) notes.push("superflex QB depth");
+  if (format.tePremium && (counts.TE || 0) < 2) notes.push("TE-premium depth");
+  return { score, notes: notes.slice(0, 3), counts, coverage, format, pillars: { lineup: Math.round(coverageScore), depth: Math.round(depthScore), allocation: Math.round(allocationScore), market: Math.round(valueScore), strategy: Math.round(strategyScore) } };
+}
+
+function contextualGradeScore(picks, scored) {
+  const context = rosterContextScore(picks, scored);
+  return { total: context.score, context };
+}
+
+function buildTeamRecapData() {
+  const slots = teamsOrder.length ? teamsOrder : Array.from({ length: currentTeams || 12 }, (_, i) => ({ slot: i + 1, name: `Team ${i + 1}` }));
+  return slots.map((team) => {
+    const picks = allPicks.filter((p) => Number(p.draft_slot) === Number(team.slot)).sort((a, b) => a.pick_no - b.pick_no);
+    const scored = picks.map((pick) => ({ pick, score: adpScoreForPick(pick) })).filter((row) => typeof row.score === "number");
+    const adpTotal = scored.reduce((sum, row) => sum + row.score, 0);
+    const contextual = contextualGradeScore(picks, scored);
+    const total = contextual.total;
+    const avg = total;
+    const best = scored.reduce((cur, row) => (!cur || row.score > cur.score ? row : cur), null);
+    const worst = scored.reduce((cur, row) => (!cur || row.score < cur.score ? row : cur), null);
+    const owner = team.name || team.owner_name || picks[0]?.team_name || picks[0]?.team_owner || `Team ${team.slot}`;
+    return { team, owner, picks, scored, adpTotal, total, avg, best, worst, context: contextual.context, grade: picks.length ? gradeLetter(avg) : "N/A" };
+  });
+}
+
+function recapSummary(teamData) {
+  const p = teamData.context.pillars;
+  const contextText = teamData.context.notes.length ? ` Watch: ${teamData.context.notes.join(", ")}.` : " League-fit construction is clean.";
+  const marketText = teamData.scored.length ? ` Market context contributed ${p.market}/15.` : " Market data unavailable; a neutral 8/15 was used.";
+  return `${teamData.total}/100 Draft Fit · lineup ${p.lineup}/45 · depth ${p.depth}/20 · allocation ${p.allocation}/15. ${marketText}${contextText}`;
+}
+
+function renderRecapAwards(teamData) {
+  const ranked = [...teamData].filter((t) => t.picks.length).sort((a, b) => b.total - a.total);
+  if (!ranked.length) return;
+  const bestTeam = ranked[0];
+  const marketPicks = ranked.flatMap((t) => t.scored);
+  const bestPick = [...marketPicks].sort((a, b) => b.score - a.score)[0];
+  const synergies = allPicks
+    .map((pick) => ({ pick, synergy: synergyForPick(pick, allPicks) }))
+    .filter((row) => row.synergy);
+  const bestStack = synergies.find((row) => row.synergy.type === "stack");
+  const bestHandcuff = synergies.find((row) => row.synergy.type === "handcuff");
+  const mostCorrelated = [...teamData]
+    .map((team) => {
+      const count = synergies.filter((row) => Number(row.pick.draft_slot) === Number(team.team.slot)).length;
+      return { team, count };
+    })
+    .sort((a, b) => b.count - a.count)[0];
+  const synergyCards = [
+    bestStack ? `<div class="awardcard"><div class="alabel">Best Stack</div><div class="aplayer">${escapeHtml(bestStack.pick.team_owner || bestStack.pick.team_name)}</div><div class="ameta">${escapeHtml(bestStack.synergy.main)}</div></div>` : "",
+    bestHandcuff ? `<div class="awardcard"><div class="alabel">Best Handcuff</div><div class="aplayer">${escapeHtml(bestHandcuff.pick.team_owner || bestHandcuff.pick.team_name)}</div><div class="ameta">${escapeHtml(bestHandcuff.synergy.main)}</div></div>` : "",
+    mostCorrelated && mostCorrelated.count > 0 ? `<div class="awardcard"><div class="alabel">Most Correlated</div><div class="aplayer">${escapeHtml(mostCorrelated.team.owner)}</div><div class="ameta">${mostCorrelated.count} teammate/stack signals found</div></div>` : ""
+  ].join("");
+  recapawards.innerHTML = `
+    <div class="awardcard grade"><div class="alabel">Best League Fit</div><div class="aplayer">${escapeHtml(bestTeam.owner)}</div><div class="ameta">${bestTeam.grade} · ${bestTeam.total}/100 Draft Fit</div></div>
+    ${bestPick ? `<div class="awardcard"><div class="alabel">Best Market Value</div><div class="aplayer">${escapeHtml(bestPick.pick.player.name)}</div><div class="ameta">${escapeHtml(bestPick.pick.team_owner || bestPick.pick.team_name)} · ${formatScore(bestPick.score)} vs ADP</div></div>` : ""}
+    ${synergyCards}
+    <div class="awardcard"><div class="alabel">League Format</div><div class="aplayer">${escapeHtml(leagueFormat().short)}</div><div class="ameta">Draft Fit: lineup 45 · depth 20 · allocation 15 · market 15 · strategy 5</div></div>`;
+}
+
+function renderRecapTeams(teamData) {
+  recapgrid.className = "recapteams";
+  recapgrid.style.zoom = "";
+  recapgrid.innerHTML = teamData.map((t) => {
+    const pillClass = t.total >= 73 ? "value" : t.total < 57 ? "reach" : "";
+    const totalText = `${t.total}/100`;
+    const rows = t.picks.map((pick) => {
+      const score = adpScoreForPick(pick);
+      const scoreText = typeof score === "number" ? formatScore(score) : "N/A";
+      return `<div class="recapplayer">
+        <div class="recappick">R${pick.round}</div>
+        <div>
+          <div class="recappname">${escapeHtml(pick.player.name)}</div>
+          <div class="recappmeta">${escapeHtml(pick.player.position || "")} · ${escapeHtml(pick.player.team || "FA")}${pick.player.is_rookie ? " · Rookie" : pick.player.is_veteran ? " · Veteran" : ""}</div>
+        </div>
+        <div class="adppill ${scoreClass(score)}">${scoreText}</div>
+      </div>`;
+    }).join("") || `<div class="recapplayer"><div class="recappick">--</div><div><div class="recappname">No picks found</div></div><div class="adppill">N/A</div></div>`;
+    return `<section class="recapteam">
+      <div class="recapteam-head">
+        <div class="gradebadge">${escapeHtml(t.grade)}</div>
+        <div>
+          <div class="recapteam-name">${escapeHtml(t.owner)}</div>
+          <div class="recapteam-meta">T${escapeHtml(t.team.slot)} · ${t.picks.length} picks · ${escapeHtml(t.context.format.short)}</div>
+        </div>
+        <div class="scorepill ${pillClass}">${totalText}</div>
+      </div>
+      <div class="recapsummary">${escapeHtml(recapSummary(t))}</div>
+      <div class="recapplayer-list">${rows}</div>
+    </section>`;
+  }).join("");
+}
+
+function pickSortValue(pick) {
+  const adpScore = adpScoreForPick(pick);
+  return (typeof adpScore === "number" ? adpScore : 0) - pick.pick_no * 0.04;
+}
+
+function lineupRank(pick) {
+  const adp = typeof pick.adp === "number" ? pick.adp : pick.pick_no;
+  return pick.pick_no * 2 + adp * 0.35;
+}
+
+function takeBestPlayer(pool, predicate, sorter = (a, b) => lineupRank(a) - lineupRank(b)) {
+  const candidates = pool.filter(predicate).sort(sorter);
+  const pick = candidates[0] || null;
+  if (!pick) return null;
+  const idx = pool.indexOf(pick);
+  if (idx >= 0) pool.splice(idx, 1);
+  return pick;
+}
+
+function lineupForPicks(picks) {
+  const coverage = lineupCoverage(picks);
+  return { starters: coverage.assignments.map((row) => ({ label: row.slot, pick: row.pick })), bench: coverage.bench.sort((a, b) => lineupRank(a) - lineupRank(b)) };
+}
+
+function lineupSlotHtml(row) {
+  const pick = row.pick;
+  if (!pick) {
+    return `<div class="lineupslot"><div class="slotlabel">${row.label}</div><div><div class="slotplayer">Open slot</div><div class="slotmeta">No drafted player fits here</div></div><div class="adppill">--</div></div>`;
+  }
+  const score = adpScoreForPick(pick);
+  return `<div class="lineupslot">
+    <div class="slotlabel">${row.label}</div>
+    <div>
+      <div class="slotplayer">${escapeHtml(pick.player.name)}</div>
+      <div class="slotmeta">${escapeHtml(pick.player.position || "")} · ${escapeHtml(pick.player.team || "FA")} · R${pick.round}.${pick.pick_no}</div>
+    </div>
+    <div class="adppill ${scoreClass(score)}">${formatScore(score)}</div>
+  </div>`;
+}
+
+function renderRecapLineups(teamData) {
+  recapgrid.className = "recaplineups";
+  recapgrid.style.zoom = "";
+  recapgrid.innerHTML = teamData.map((t) => {
+    const lineup = lineupForPicks(t.picks);
+    const starterHtml = lineup.starters.map(lineupSlotHtml).join("");
+    const benchRows = lineup.bench.slice(0, 8).map((pick) => lineupSlotHtml({ label: "BN", pick })).join("") ||
+      `<div class="lineupslot"><div class="slotlabel">BN</div><div><div class="slotplayer">No bench players</div></div><div class="adppill">--</div></div>`;
+    const openSlots = lineup.starters.filter((row) => !row.pick).map((row) => row.label);
+    const note = openSlots.length
+      ? `Needs starter coverage at ${openSlots.join(", ")}.`
+      : t.context.notes.length ? `Construction watch: ${t.context.notes.join(", ")}.` : "Clean starter build with usable bench shape.";
+    return `<section class="lineupcard">
+      <div class="lineuphead">
+        <div><div class="lineupname">${escapeHtml(t.owner)}</div><div class="lineupmeta">${t.grade} · ${t.total}/100 Draft Fit · ${escapeHtml(t.context.format.short)}</div></div>
+        <div class="scorepill ${t.total >= 73 ? "value" : t.total < 57 ? "reach" : ""}">${t.total}</div>
+      </div>
+      <div class="lineupsection"><div class="lineuplabel">Projected Starters</div>${starterHtml}</div>
+      <div class="lineupsection"><div class="lineuplabel">Best Bench / Depth</div>${benchRows}</div>
+      <div class="lineupnotes">${escapeHtml(note)}</div>
+    </section>`;
+  }).join("");
+}
+
+function renderRecapBoard() {
+  const pickByNo = new Map(allPicks.map((p) => [p.pick_no, p]));
+  const cols = teamsOrder.length || currentTeams;
+  const rounds = currentRounds || Math.ceil(allPicks.length / cols);
+  const headerTeams = teamsOrder.length ? teamsOrder : Array.from({ length: cols }, (_, i) => ({ slot: i + 1, name: `Team ${i + 1}` }));
+  recapgrid.className = "recapboard";
+  recapgrid.style.zoom = ZOOM_LEVELS[recapZoomIndex];
+
+  const g = document.createElement("div");
+  g.className = "recap-final-grid";
+  g.style.gridTemplateColumns = `50px repeat(${cols}, minmax(130px, 1fr))`;
+  let html = `<div class="gcell roundlabel header"></div>`;
+  headerTeams.forEach((t) => { html += headerCellHtml(t); });
+  for (let round = 1; round <= rounds; round++) {
+    html += `<div class="gcell roundlabel">R${round}</div>`;
+    for (let slot = 1; slot <= cols; slot++) {
+      const pickNo = pickNoForRoundSlot(round, slot, cols);
+      const pick = pickByNo.get(pickNo);
+      if (pick) {
+        const color = POS_COLORS[pick.player.position] || "#555";
+        html += `<div class="gcell filled">
+          <div class="gplayer">${escapeHtml(pick.player.name)}</div>
+          <div class="gpos" style="background:${color}">${escapeHtml(pick.player.position || "")}</div>
+          ${gridCellFlags(pick)}
+        </div>`;
+      } else {
+        html += `<div class="gcell"></div>`;
+      }
+    }
+  }
+  g.innerHTML = html;
+  recapgrid.replaceChildren(g);
+}
+
+function renderRecap() {
+  const teamData = buildTeamRecapData();
+  renderRecapAwards(teamData);
+  recapTeamsBtn.classList.toggle("active", recapMode === "teams");
+  recapLineupsBtn.classList.toggle("active", recapMode === "lineups");
+  recapBoardBtn.classList.toggle("active", recapMode === "board");
+  recapZoomBtn.style.display = recapMode === "board" ? "" : "none";
+  if (recapMode === "board") renderRecapBoard();
+  else if (recapMode === "lineups") renderRecapLineups(teamData);
+  else renderRecapTeams(teamData);
+}
+
+function showRecap(picks) {
+  if (revealing || revealQueue.length) {
+    pendingRecapPicks = picks;
+    return;
+  }
+  completeOverlay.classList.add("show");
+  allPicks = picks;
+  recapMode = "teams";
+  recapZoomBtn.textContent = `Zoom ${Math.round(ZOOM_LEVELS[recapZoomIndex] * 100)}%`;
+  renderRecap();
+  if (!recapCelebrated) {
+    recapCelebrated = true;
+    burstReveal("#ffcc33", canvas.height * 0.28);
+  }
+}
+
+// ==================================================
+// WEBSOCKET
+// ==================================================
+let ws;
+let reconnectDelay = 1000;
+let reconnectBannerTimer = null;
+let reconnectTimer = null;
+let lastServerMessageAt = 0;
+let clientInitialized = false;
+
+function reconcilePicks(picks) {
+  const byPick = new Map();
+  (picks || []).forEach((pick) => {
+    if (pick && Number.isFinite(Number(pick.pick_no))) byPick.set(Number(pick.pick_no), pick);
+  });
+  return [...byPick.values()].sort((a, b) => Number(a.pick_no) - Number(b.pick_no));
+}
+
+function showFeedStatus(text, restored = false) {
+  reconnectbanner.textContent = text;
+  reconnectbanner.classList.toggle("restored", restored);
+  reconnectbanner.classList.add("show");
+}
+
+function markFeedRestored() {
+  const wasVisible = reconnectbanner.classList.contains("show");
+  clearTimeout(reconnectBannerTimer);
+  if (!wasVisible) {
+    reconnectbanner.classList.remove("show", "restored");
+    return;
+  }
+  showFeedStatus("Live feed restored · fully synced", true);
+  reconnectBannerTimer = setTimeout(() => reconnectbanner.classList.remove("show", "restored"), 1800);
+}
+
+function connect() {
+  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(`${wsProtocol}//${location.host}`);
+  lastServerMessageAt = Date.now();
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    clearTimeout(reconnectTimer);
+  };
+  ws.onclose = () => {
+    // Only surface the banner if it doesn't come right back — avoids flicker on brief blips.
+    clearTimeout(reconnectBannerTimer);
+    reconnectBannerTimer = setTimeout(() => showFeedStatus("Live feed delayed · resyncing…"), 1200);
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 1.5, 8000);
+  };
+  ws.onerror = () => {};
+
+  ws.onmessage = (event) => {
+    lastServerMessageAt = Date.now();
+    let msg;
+    try { msg = JSON.parse(event.data); } catch (e) { return; }
+
+    if (msg.type === "UNCONFIGURED") {
+      appEl.classList.remove("ready");
+      setupscreen.classList.add("show");
+    } else if (msg.type === "RESET") {
+      location.reload();
+    } else if (msg.type === "INIT") {
+      const knownPickNos = new Set(allPicks.map((pick) => Number(pick.pick_no)));
+      const reconciled = reconcilePicks(msg.all_picks);
+      const allRecoveredPicks = clientInitialized
+        ? reconciled.filter((pick) => !knownPickNos.has(Number(pick.pick_no)))
+        : [];
+      const recoveredPicks = broadcastSettings.mockDraftMode
+        ? allRecoveredPicks.slice(-MAX_REVEAL_BACKLOG)
+        : allRecoveredPicks;
+      allPicks = reconciled;
+      renderBroadcastSettings();
+      teamsOrder = msg.teams_order || [];
+      draftStatus = msg.draft_status || null;
+      leagueContext = msg.league_context || leagueContext;
+      adpAvailable = !!msg.adp_available;
+      primePickAssets(allPicks);
+      seedTicker(allPicks);
+      if (msg.clock) renderClock(msg.clock);
+      if (allPicks.length > 0) renderSpotlight(allPicks[allPicks.length - 1], false);
+      showRestingView();
+      maybeRunDraftOrderReveal();
+      recoveredPicks.forEach(queueReveal);
+      if (msg.draft_complete) showRecap(allPicks);
+      clientInitialized = true;
+      markFeedRestored();
+    } else if (msg.type === "HISTORY") {
+      leagueContext = msg.league_context || leagueContext;
+      allPicks = reconcilePicks(msg.all_picks);
+      primePickAssets(allPicks);
+      seedTicker(allPicks);
+      invalidateBoardViews();
+      if (msg.clock) renderClock(msg.clock);
+      if (!revealing) showRestingView();
+      renderBroadcastSettings();
+    } else if (msg.type === "PICK") {
+      const existing = allPicks.findIndex((pick) => Number(pick.pick_no) === Number(msg.data?.pick_no));
+      if (existing >= 0) {
+        allPicks[existing] = msg.data;
+        invalidateBoardViews();
+        return;
+      }
+      allPicks.push(msg.data);
+      allPicks.sort((a, b) => Number(a.pick_no) - Number(b.pick_no));
+      renderBroadcastSettings();
+      primePickAssets([msg.data]);
+      addToTicker(msg.data);
+      queueReveal(msg.data);
+    } else if (msg.type === "PICK_TAGS") {
+      const updates = new Map((msg.updates || []).map((update) => [Number(update.pick_no), update.player]));
+      allPicks.forEach((pick) => {
+        const playerUpdate = updates.get(Number(pick.pick_no));
+        if (playerUpdate) Object.assign(pick.player, playerUpdate);
+      });
+      invalidateBoardViews();
+      seedTicker(allPicks);
+      renderGrid();
+      renderTeamView();
+      if (completeOverlay.classList.contains("show")) renderRecap();
+    } else if (msg.type === "CLOCK") {
+      renderClock(msg);
+    } else if (msg.type === "TEAMS") {
+      applyTeamsOrder(msg.teams_order || [], msg.clock || null);
+    } else if (msg.type === "SYNC") {
+      // A count mismatch means an event was missed even if the socket still
+      // looks open. Reconnect immediately; INIT is an authoritative snapshot.
+      if (Number(msg.pick_count) !== allPicks.length && ws?.readyState === WebSocket.OPEN) {
+        showFeedStatus("Catching up missed picks · resyncing…");
+        ws.close(4000, "state mismatch");
+      }
+    } else if (msg.type === "TRADE") {
+      showTrade(msg.data);
+    } else if (msg.type === "COMPLETE") {
+      showRecap(msg.all_picks || allPicks);
+    }
+  };
+}
+
+// Browsers can take tens of seconds to notice a half-open Wi-Fi connection.
+// The server speaks every two seconds; six quiet seconds is enough to replace
+// the socket and reconcile state long before the old failure window.
+setInterval(() => {
+  if (ws?.readyState === WebSocket.OPEN && Date.now() - lastServerMessageAt > 6500) {
+    showFeedStatus("No live signal · rebuilding connection…");
+    ws.close(4001, "feed watchdog");
+  }
+}, 2000);
+
+checkStatus();
+</script>
+</body>
+</html>
