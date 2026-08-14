@@ -1,5 +1,10 @@
 import { readPlayerCache, writePlayerCache } from "./player-store.js";
 
+/** @typedef {import("./draft-types.js").DraftClockState} DraftClockState */
+/** @typedef {import("./draft-types.js").DraftEvent} DraftEvent */
+/** @typedef {import("./draft-types.js").DraftPick} DraftPick */
+/** @typedef {import("./draft-types.js").LeagueContext} LeagueContext */
+
 // --------------------
 // CONFIG
 // --------------------
@@ -84,6 +89,7 @@ async function fetchJSON(url, { timeout = FETCH_TIMEOUT_MS } = {}) {
 // --------------------
 const subscribers = new Set();
 
+/** @param {DraftEvent} payload */
 function broadcast(payload) {
   for (const subscriber of subscribers) {
     try {
@@ -111,6 +117,11 @@ function initialPayload() {
   };
 }
 
+/**
+ * Subscribe to the complete draft-engine event contract.
+ * @param {(event: DraftEvent) => void} subscriber
+ * @returns {() => void}
+ */
 export function subscribeToDraftEvents(subscriber) {
   subscribers.add(subscriber);
   return () => subscribers.delete(subscriber);
@@ -332,6 +343,7 @@ function draftFallbackContext(meta = draftMeta) {
   };
 }
 
+/** @returns {LeagueContext} */
 function buildLeagueContext() {
   return leagueContext || draftFallbackContext();
 }
@@ -451,6 +463,7 @@ function guessTeams() {
   return max;
 }
 
+/** @returns {DraftClockState} */
 function currentClockPayload(nextPickNo) {
   const teams = guessTeams();
   const pickTimer = draftMeta?.settings?.pick_timer || 0;
