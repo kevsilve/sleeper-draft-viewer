@@ -2,7 +2,12 @@
 <html>
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#060a14" />
+<meta name="description" content="A live, party-ready presentation for Sleeper fantasy football drafts." />
 <title>Draft Board</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -2048,7 +2053,17 @@
   <div id="recapgrid"></div>
 </div>
 
-<script>
+<script type="module">
+import {
+  configureDraft,
+  detectDraftsForUsername,
+  forceDraftResync,
+  requestDraftSnapshot,
+  startDraftEngine,
+  subscribeToDraftEvents,
+  validateDraft
+} from "/src/draft-engine.js";
+import { registerSW } from "virtual:pwa-register";
 const POS_COLORS = { QB: "var(--qb)", RB: "var(--rb)", WR: "var(--wr)", TE: "var(--te)", K: "var(--k)", DEF: "var(--def)" };
 const POS_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF", "FLEX"];
 // hex versions for building the glow/ring CSS vars behind the reveal card
@@ -2313,6 +2328,7 @@ function startRevealPerformanceMonitor() {
 
 document.addEventListener("visibilitychange", () => {
   document.body.classList.toggle("app-suspended", document.hidden);
+  if (!document.hidden) forceDraftResync();
 });
 
 // ==================================================
@@ -2337,9 +2353,8 @@ async function runDetect() {
   draftlist.innerHTML = '<div class="setupmsg">Searching...</div>';
   detectBtn.disabled = true;
   try {
-    const res = await fetch(`/api/detect?username=${encodeURIComponent(username)}`);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Search failed");
+    const data = await detectDraftsForUsername(username);
+    try { localStorage.setItem("draft-viewer-last-username", username); } catch {}
     if (!data.drafts || data.drafts.length === 0) {
       draftlist.innerHTML = '<div class="setupmsg">No drafts found for that username.</div>';
       return;
@@ -2398,14 +2413,12 @@ async function runDetect() {
 async function connectDraft(draftId) {
   setupErr.textContent = "";
   try {
-    const res = await fetch("/api/draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ draft_id: draftId })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not connect to that draft");
-    location.reload();
+    const normalized = extractDraftId(String(draftId || "").trim());
+    await validateDraft(normalized);
+    try { localStorage.setItem("draft-viewer-last-draft", normalized); } catch {}
+    const nextUrl = new URL(location.href);
+    nextUrl.searchParams.set("draft", normalized);
+    location.assign(nextUrl);
   } catch (err) {
     setupErr.textContent = err.message;
   }
@@ -2432,16 +2445,30 @@ function extractDraftId(input) {
 changebtn.onclick = () => { setupscreen.classList.add("show"); };
 
 async function checkStatus() {
+  const params = new URLSearchParams(location.search);
+  let draftId = params.get("draft");
+  if (!draftId) {
+    try { draftId = localStorage.getItem("draft-viewer-last-draft"); } catch {}
+  }
+
   try {
-    const res = await fetch("/api/status");
-    const data = await res.json();
-    if (data.configured) {
-      appEl.classList.add("ready");
-      connect();
-    } else {
-      setupscreen.classList.add("show");
-    }
-  } catch {
+    const savedUsername = localStorage.getItem("draft-viewer-last-username");
+    if (savedUsername && !usernameInput.value) usernameInput.value = savedUsername;
+  } catch {}
+
+  if (!draftId) {
+    setupscreen.classList.add("show");
+    return;
+  }
+
+  try {
+    await configureDraft(draftId);
+    startDraftEngine();
+    appEl.classList.add("ready");
+    setupscreen.classList.remove("show");
+    connect();
+  } catch (err) {
+    setupErr.textContent = err.message || "Could not load that draft.";
     setupscreen.classList.add("show");
   }
 }
@@ -3945,6 +3972,7 @@ function showRecap(picks) {
 // WEBSOCKET
 // ==================================================
 let ws;
+let unsubscribeFromEngine = null;
 let reconnectDelay = 1000;
 let reconnectBannerTimer = null;
 let reconnectTimer = null;
@@ -3977,8 +4005,17 @@ function markFeedRestored() {
 }
 
 function connect() {
-  const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${wsProtocol}//${location.host}`);
+  if (unsubscribeFromEngine) unsubscribeFromEngine();
+  ws = {
+    readyState: WebSocket.CONNECTING,
+    close() {
+      if (this.readyState === WebSocket.CLOSED) return;
+      this.readyState = WebSocket.CLOSED;
+      if (unsubscribeFromEngine) unsubscribeFromEngine();
+      unsubscribeFromEngine = null;
+      this.onclose?.();
+    }
+  };
   lastServerMessageAt = Date.now();
   ws.onopen = () => {
     reconnectDelay = 1000;
@@ -4073,12 +4110,22 @@ function connect() {
         showFeedStatus("Catching up missed picks · resyncing…");
         ws.close(4000, "state mismatch");
       }
+    } else if (msg.type === "FEED_STATUS") {
+      if (msg.status === "restored") markFeedRestored();
+      else showFeedStatus("Live feed delayed · retrying Sleeper…");
     } else if (msg.type === "TRADE") {
       showTrade(msg.data);
     } else if (msg.type === "COMPLETE") {
       showRecap(msg.all_picks || allPicks);
     }
   };
+
+  unsubscribeFromEngine = subscribeToDraftEvents((message) => {
+    ws?.onmessage?.({ data: JSON.stringify(message) });
+  });
+  ws.readyState = WebSocket.OPEN;
+  ws.onopen();
+  requestDraftSnapshot();
 }
 
 // Browsers can take tens of seconds to notice a half-open Wi-Fi connection.
@@ -4087,11 +4134,14 @@ function connect() {
 setInterval(() => {
   if (ws?.readyState === WebSocket.OPEN && Date.now() - lastServerMessageAt > 6500) {
     showFeedStatus("No live signal · rebuilding connection…");
-    ws.close(4001, "feed watchdog");
+    forceDraftResync();
+    lastServerMessageAt = Date.now();
   }
 }, 2000);
 
 checkStatus();
+
+if (import.meta.env.PROD) registerSW({ immediate: true });
 </script>
 </body>
 </html>

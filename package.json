@@ -1,14 +1,23 @@
 {
   "name": "sleeper-draft-viewer",
   "version": "1.0.0",
-  "main": "server.js",
+  "private": true,
   "type": "module",
-  "scripts": {
-    "start": "node server.js",
-    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-server.ps1"
+  "engines": {
+    "node": "24.x"
   },
-  "dependencies": {
-    "express": "^4.22.2",
-    "ws": "^8.21.0"
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "vite": "^7.1.1",
+    "vite-plugin-pwa": "^1.0.2",
+    "vitest": "^3.2.4"
   }
 }
