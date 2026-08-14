@@ -1,0 +1,175 @@
+  /* ---------- GRID VIEW ---------- */
+  #gridview {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    overflow: auto;
+    padding: 16px 24px;
+    contain: layout paint style;
+  }
+  #gridview.active { opacity: 1; pointer-events: auto; }
+
+  #grid,
+  .recap-final-grid { display: grid; gap: 4px; min-width: max-content; }
+
+  .gcell {
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-width: 130px;
+    min-height: 56px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .gcell.header {
+    background: transparent;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 8px 6px;
+  }
+  .gcell.header .headertext { display: flex; flex-direction: column; overflow: hidden; }
+  .gcell.header .hname { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gcell.header .hteam { font-size: 10px; color: var(--text-dim); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .gcell.roundlabel {
+    background: transparent;
+    color: var(--text-dim);
+    font-weight: 700;
+    justify-content: center;
+    align-items: center;
+    min-width: 50px;
+  }
+
+  .gcell.filled {
+    border-left: 4px solid var(--accent);
+    background: linear-gradient(135deg, var(--panel), var(--panel2));
+    position: relative;
+    transition: transform 0.12s;
+  }
+  .gcell.filled:hover { transform: translateY(-1px); }
+  .gcell .gplayer { font-weight: 700; font-size: 14px; }
+  .gcell .gpos {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 2px;
+    color: white;
+    width: fit-content;
+  }
+  .gcell .gflags { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+  .gtag {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+  }
+  .gtag.rookie { background: var(--rookie); color: #06090f; }
+  .gtag.veteran { background:rgba(94,200,255,.16);border:1px solid rgba(94,200,255,.45);color:var(--veteran); }
+
+  .gcell.current { outline: 2px solid var(--accent); }
+
+  /* ---------- TEAM VIEW ---------- */
+  #teamview {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    overflow: auto;
+    padding: 20px 24px;
+    contain: layout paint style;
+  }
+  #teamview.active { opacity: 1; pointer-events: auto; }
+  #teamgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .teamcard {
+    background: linear-gradient(160deg, rgba(255,255,255,0.035), var(--panel) 45%);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .teamcard:hover { border-color: rgba(255,204,51,0.35); transform: translateY(-2px); }
+  .teamcard .thead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .teamcard .thead .tname { font-weight: 800; font-size: 15px; }
+  .teamcard .thead .tuser { font-size: 11px; color: var(--text-dim); }
+  .poslist { display: flex; flex-direction: column; gap: 6px; }
+  .posrow { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+  .posrow .poslabel {
+    min-width: 32px;
+    text-align: center;
+    flex-shrink: 0;
+    font-weight: 800;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: #06090f;
+    background: rgba(255,255,255,0.12);
+  }
+  .posrow .poslabel.QB { background: var(--qb); color: white; }
+  .posrow .poslabel.RB { background: var(--rb); }
+  .posrow .poslabel.WR { background: var(--wr); color: white; }
+  .posrow .poslabel.TE { background: var(--te); }
+  .posrow .poslabel.K  { background: var(--k); color: white; }
+  .posrow .poslabel.DEF{ background: var(--def); color: white; }
+  .posrow .posplayers { color: var(--text); line-height: 1.5; }
+  .posrow .posplayers .ply { color: var(--text-dim); }
+  .posrow .posplayers .ply b { color: var(--text); font-weight: 600; }
+  .posrow .posplayers .ply .rk { color: var(--rookie); font-weight: 800; }
+  .posrow .posplayers .ply .vt { color: var(--veteran); font-weight: 800; }
+
+  /* ---------- WAITING STATE ---------- */
+  #waiting {
+    font-size: 34px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  /* ---------- TICKER ---------- */
+  #ticker {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+    padding: 12px 32px;
+    background: linear-gradient(0deg, var(--panel2), var(--panel));
+    border-top: 2px solid var(--accent);
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.25);
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  #ticker .item { color: var(--text-dim); flex-shrink: 0; }
+  #ticker .item b { color: var(--text); }
+  #ticker .item .p { color: var(--accent); font-weight: 700; }
+  #ticker .item .rk { color: var(--rookie); font-weight: 800; margin-left: 4px; }
+  #ticker .item .vt { color:var(--veteran);font-weight:800;margin-left:4px; }
+  #ticker .item .syn { color: var(--accent); font-weight: 900; text-transform: uppercase; font-size: 0.88em; letter-spacing: 0.7px; }
+

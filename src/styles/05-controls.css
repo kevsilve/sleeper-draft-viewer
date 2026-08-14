@@ -1,0 +1,107 @@
+  /* ---------- CONTROLS ---------- */
+  #controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    transition: opacity 0.3s;
+  }
+  #controls.hidden { opacity: 0; pointer-events: none; }
+  #controls button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    font-size: 15px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 12px;
+    border-radius: 19px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  #controls button:hover { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.2); }
+  #controls button:active { transform: scale(0.94); }
+  #controls button.active { background: var(--accent); color: #06090f; font-weight: 800; border-color: var(--accent); }
+
+  /* ---------- TRADE BANNER ---------- */
+  #tradebanner {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-30px) scale(0.92);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: linear-gradient(160deg, rgba(28,39,64,0.96), rgba(16,23,40,0.96));
+    border: 1px solid rgba(255,204,51,0.35);
+    border-radius: 18px;
+    padding: 18px 34px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,204,51,0.12);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.35s, transform 0.35s;
+    z-index: 70;
+    pointer-events: none;
+  }
+  #tradebanner.show {
+    opacity: 1;
+    animation: tradeBounce 0.5s cubic-bezier(.2,1.5,.35,1) forwards;
+  }
+  @keyframes tradeBounce {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(0.9); }
+    60%  { opacity: 1; transform: translateX(-50%) translateY(4px) scale(1.03); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+  #tradebanner .tradeicon {
+    font-size: 34px;
+    animation: tradeSpin 2.2s ease-in-out infinite;
+  }
+  @keyframes tradeSpin {
+    0%, 100% { transform: rotate(-8deg); }
+    50%      { transform: rotate(8deg); }
+  }
+  #tradebanner .tradelabel {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  #tradebanner .trademain { font-size: 24px; margin-top: 2px; }
+  #tradebanner .trademain b { color: var(--text); }
+  #tradebanner .tradearrow { color: var(--accent); font-weight: 800; margin: 0 4px; }
+  #tradebanner .tradesub { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ---------- RECONNECT BANNER ---------- */
+  #reconnectbanner {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-14px);
+    background: rgba(224,167,46,0.16);
+    border: 1px solid rgba(224,167,46,0.5);
+    color: #e0a72e;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    padding: 9px 22px;
+    border-radius: 999px;
+    z-index: 95;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  #reconnectbanner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #reconnectbanner::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e0a72e;
+    margin-right: 8px;
+    animation: pulseDot 1s infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+

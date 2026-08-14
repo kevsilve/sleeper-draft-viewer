@@ -1,0 +1,150 @@
+  /* ---------- TOP BAR ---------- */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 14px 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+
+  #onclock { display: flex; align-items: center; gap: 16px; flex: 1 1 auto; min-width: 0; }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #1c2740;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.12);
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  #onclock .label {
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  #onclock .team {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: 0 0 18px var(--accent-glow);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  #onclock .clock-owner { margin-top:2px;color:var(--text-dim);font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  #onclock .namewrap { min-width: 0; }
+
+  #progress { font-size: 16px; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+  #progress .big { font-size: 22px; color: var(--text); font-weight: 700; }
+
+  #timerwrap { position: relative; width: 66px; height: 66px; flex-shrink: 0; }
+  #timerwrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+  #timerwrap circle { fill: none; stroke-width: 6; }
+  #timerwrap.warn #timertext { color: #e0a72e; }
+  #timerwrap.critical #timertext { color: #e74c3c; }
+  #timerwrap.critical { animation: timerPulse 1s ease-in-out infinite; }
+  @keyframes timerPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+
+  /* Final-seconds urgency: a soft red pulse around the screen edge, visible
+     from across the room without being distracting up close. */
+  body.clock-critical::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 89;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 0 rgba(231,76,60,0);
+    animation: edgePulse 1s ease-in-out infinite;
+  }
+  @keyframes edgePulse {
+    0%, 100% { box-shadow: inset 0 0 60px 0 rgba(231,76,60,0.15); }
+    50%      { box-shadow: inset 0 0 110px 0 rgba(231,76,60,0.32); }
+  }
+  #timerbg { stroke: rgba(255,255,255,0.1); }
+  #timerfg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.2s linear, stroke 0.3s; }
+  #timertext { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+
+  /* ---------- MAIN AREA (spotlight / grid / teams) ---------- */
+  #main { flex: 1; position: relative; overflow: hidden; }
+
+  #spotlight {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s;
+    pointer-events: none;
+    contain: layout paint style;
+  }
+  #spotlight.active { opacity: 1; pointer-events: auto; }
+  #spotlight.dormant { visibility:hidden;content-visibility:hidden; }
+
+  #spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(from 0deg, transparent, var(--pos-glow, var(--accent-glow)), transparent 30%);
+    opacity: 0;
+    animation: none;
+  }
+  #spotlight.sweep::before { animation: sweepGlow 1.4s ease-out; }
+  @keyframes sweepGlow {
+    0%   { opacity: 0; transform: rotate(0deg); }
+    30%  { opacity: 0.45; }
+    100% { opacity: 0; transform: rotate(140deg); }
+  }
+
+  /* soft radial wash behind the whole scene, tinted by the drafted player's position */
+  #spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, var(--pos-glow, var(--accent-glow)) 0%, transparent 55%);
+    opacity: 0.5;
+    pointer-events: none;
+    transition: background 0.4s;
+  }
+
+  /* One composited logo field replaces the old 100+ tile/image DOM nodes. */
+  #logopattern {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    background-image: var(--team-logo-layer), var(--team-logo-layer);
+    background-repeat: repeat;
+    background-size: 116px 116px;
+    background-position: 0 0, 58px 58px;
+    -webkit-mask-image: radial-gradient(ellipse at center, #000 15%, rgba(0,0,0,.82) 55%, transparent 100%);
+    mask-image: radial-gradient(ellipse at center, #000 15%, rgba(0,0,0,.82) 55%, transparent 100%);
+    contain: strict;
+    will-change: opacity;
+  }
+  #logopattern.reveal { opacity: 0.18; }
+  #logopattern::after { content:"";position:absolute;inset:-15%;background:repeating-linear-gradient(45deg,transparent 0 80px,rgba(255,255,255,.055) 81px 82px,transparent 83px 164px),repeating-linear-gradient(-45deg,transparent 0 80px,rgba(255,255,255,.04) 81px 82px,transparent 83px 164px);transform:rotate(.001deg); }
+
+  /* Never spend frames animating the reveal after it has left the screen. */
+  #spotlight:not(.active) .reveal,
+  #spotlight:not(.active) .orbit,
+  body.app-suspended #spotlight * { animation-play-state: paused !important; }
+
