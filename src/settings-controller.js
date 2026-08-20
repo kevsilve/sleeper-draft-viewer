@@ -1,10 +1,16 @@
-const SETTINGS_KEY = "draft-viewer-broadcast-settings-v1";
+import { isMotionMode } from "./motion-policy.js";
+
+const SETTINGS_KEY = "draft-viewer-broadcast-settings-v2";
+const LEGACY_SETTINGS_KEY = "draft-viewer-broadcast-settings-v1";
 
 export function createSettingsController({
   getPickCount,
+  getDefaultMotionMode,
   modeStatusText,
   mockModeToggle,
+  motionModeButtons,
   onMockModeEnabled,
+  onMotionChange,
   onReplayLatest,
   onSoundChange,
   replayRevealBtn,
@@ -14,13 +20,14 @@ export function createSettingsController({
   settingsSoundToggle,
   teamBuildToggle
 }) {
-  const settings = { mockDraftMode: false, showTeamBuild: true, soundEnabled: true };
+  const settings = { mockDraftMode: false, showTeamBuild: true, soundEnabled: true, motionMode: null };
   try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY) || "null");
     if (saved && typeof saved === "object") {
-      for (const key of Object.keys(settings)) {
+      for (const key of ["mockDraftMode", "showTeamBuild", "soundEnabled"]) {
         if (typeof saved[key] === "boolean") settings[key] = saved[key];
       }
+      if (isMotionMode(saved.motionMode)) settings.motionMode = saved.motionMode;
     }
   } catch {}
 
@@ -33,6 +40,12 @@ export function createSettingsController({
     mockModeToggle.setAttribute("aria-checked", String(settings.mockDraftMode));
     teamBuildToggle.setAttribute("aria-checked", String(settings.showTeamBuild));
     settingsSoundToggle.setAttribute("aria-checked", String(settings.soundEnabled));
+    const renderedMotionMode = settings.motionMode || getDefaultMotionMode();
+    motionModeButtons.forEach((button) => {
+      const active = button.dataset.motionMode === renderedMotionMode;
+      button.setAttribute("aria-checked", String(active));
+      button.classList.toggle("active", active);
+    });
     settingsbtn.textContent = settings.mockDraftMode ? "⚡ Mock" : "⚙ Live";
     settingsbtn.classList.toggle("active", settingspanel.classList.contains("show"));
     replayRevealBtn.disabled = getPickCount() === 0;
@@ -70,6 +83,16 @@ export function createSettingsController({
     render();
   };
   settingsSoundToggle.onclick = () => setSoundEnabled(!settings.soundEnabled);
+  motionModeButtons.forEach((button) => {
+    button.onclick = () => {
+      const mode = button.dataset.motionMode;
+      if (!isMotionMode(mode)) return;
+      settings.motionMode = mode;
+      save();
+      render();
+      onMotionChange(mode);
+    };
+  });
   replayRevealBtn.onclick = () => {
     togglePanel(false);
     onReplayLatest();

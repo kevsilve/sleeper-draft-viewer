@@ -289,26 +289,6 @@
 
   body.kiosk #controls { display: none; }
   body.kiosk { cursor: none; }
-  body.low-power #beams,
-  body.low-power #orbitdots,
-  body.low-power #spotlight::before {
-    display: none;
-  }
-  body.low-power #logopattern.reveal {
-    opacity: 0.14;
-  }
-  body.low-power #headshot,
-  body.low-power #draftedby {
-    box-shadow: 0 14px 36px rgba(0,0,0,0.4);
-  }
-  body.low-power .orbit.reveal {
-    animation: none;
-    opacity: 0.85;
-  }
-  body.low-power #pulsering.reveal {
-    animation: none;
-    opacity: 0;
-  }
   #spotlight.catch-up #beams,
   #spotlight.catch-up #orbitdots,
   #spotlight.catch-up #pulsering,

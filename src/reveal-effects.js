@@ -1,4 +1,4 @@
-export function createRevealEffects({ canvas, lowPowerMode, reduceMotion }) {
+export function createRevealEffects({ canvas, getMotionState }) {
   const ctx = canvas.getContext("2d");
   function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
   resize();
@@ -23,21 +23,21 @@ export function createRevealEffects({ canvas, lowPowerMode, reduceMotion }) {
   }
 
   function burstReveal(hex, originY) {
-    if (reduceMotion) return;
+    if (getMotionState().effective === "reduced") return;
     const token = revealBurstToken;
     hex = hex || "#ffcc33";
     const cx = canvas.width / 2;
     const cy = originY != null ? originY : canvas.height * 0.42;
     const scale = Math.max(1, canvas.width / 1600); // scale the burst up on bigger TV screens
 
-    flashAlpha = Math.min(flashAlpha + (lowPowerMode ? 0.16 : 0.3), lowPowerMode ? 0.24 : 0.4);
+    flashAlpha = Math.min(flashAlpha + 0.3, 0.4);
 
-    const ringCount = lowPowerMode ? 1 : 3;
+    const ringCount = 3;
     for (let i = 0; i < ringCount; i++) {
       rings.push({ x: cx, y: cy, radius: 6, alpha: 0.85, speed: (13 + i * 5) * scale, lineWidth: 3 * scale, delay: i * 5, color: hex, elapsed: 0 });
     }
 
-    const rayCount = lowPowerMode ? (canvas.width < 900 ? 10 : 16) : (canvas.width < 900 ? 28 : 54);
+    const rayCount = canvas.width < 900 ? 28 : 54;
     for (let i = 0; i < rayCount; i++) {
       const angle = (Math.PI * 2 * i) / rayCount + (Math.random() - 0.5) * 0.12;
       const speed = (Math.random() * 8 + 7) * scale;
@@ -49,11 +49,11 @@ export function createRevealEffects({ canvas, lowPowerMode, reduceMotion }) {
         len: (Math.random() * 22 + 16) * scale,
         color: i % 3 === 0 ? "#ffffff" : hex,
         life: 0,
-        maxLife: (lowPowerMode ? 30 : 42) + Math.random() * (lowPowerMode ? 8 : 16)
+        maxLife: 42 + Math.random() * 16
       });
     }
 
-    const emberCount = lowPowerMode ? (canvas.width < 900 ? 6 : 10) : (canvas.width < 900 ? 18 : 40);
+    const emberCount = canvas.width < 900 ? 18 : 40;
     for (let i = 0; i < emberCount; i++) {
       particles.push({
         type: "ember",
@@ -64,7 +64,7 @@ export function createRevealEffects({ canvas, lowPowerMode, reduceMotion }) {
         size: (Math.random() * 2.6 + 1.6) * scale,
         color: Math.random() < 0.55 ? hex : "#ffcc33",
         life: 0,
-        maxLife: (lowPowerMode ? 60 : 110) + Math.random() * (lowPowerMode ? 30 : 70),
+        maxLife: 110 + Math.random() * 70,
         flicker: Math.random() * Math.PI * 2
       });
     }
@@ -75,7 +75,10 @@ export function createRevealEffects({ canvas, lowPowerMode, reduceMotion }) {
   }
 
   function animateReveal(token = revealBurstToken) {
-    if (reduceMotion) return;
+    if (getMotionState().effective === "reduced") {
+      resetRevealBurst();
+      return;
+    }
     if (token !== revealBurstToken) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 

@@ -39,6 +39,7 @@ const settingsclose = document.getElementById("settingsclose");
 const mockModeToggle = document.getElementById("mockModeToggle");
 const teamBuildToggle = document.getElementById("teamBuildToggle");
 const settingsSoundToggle = document.getElementById("settingsSoundToggle");
+const motionModeButtons = [...document.querySelectorAll("[data-motion-mode]")];
 const replayRevealBtn = document.getElementById("replayRevealBtn");
 const modeStatusText = document.getElementById("modeStatusText");
 const performanceStatusText = document.getElementById("performanceStatusText");
@@ -95,6 +96,7 @@ export {
   mockModeToggle,
   teamBuildToggle,
   settingsSoundToggle,
+  motionModeButtons,
   replayRevealBtn,
   modeStatusText,
   performanceStatusText,
