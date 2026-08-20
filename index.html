@@ -123,6 +123,15 @@
     <div><div class="setting-name">Broadcast Sound</div><div class="setting-help">Pick stingers, clock warnings, and transition cues.</div></div>
     <button class="setting-switch" id="settingsSoundToggle" role="switch" aria-checked="true"><span></span></button>
   </div>
+  <div class="motion-setting">
+    <div class="setting-name">Motion</div>
+    <div class="setting-help">Full keeps every broadcast effect. Reduced shows the complete reveal without movement. Auto responds only to measured reveal performance.</div>
+    <div class="motion-options" role="radiogroup" aria-label="Motion mode">
+      <button class="motion-option" data-motion-mode="full" role="radio" aria-checked="false">Full</button>
+      <button class="motion-option" data-motion-mode="reduced" role="radio" aria-checked="false">Reduced</button>
+      <button class="motion-option" data-motion-mode="auto" role="radio" aria-checked="false">Auto</button>
+    </div>
+  </div>
   <button id="replayRevealBtn" class="settings-action">↻ Replay latest pick reveal</button>
   <div class="settings-foot"><span id="modeStatusDot"></span><span id="modeStatusText">Full broadcast timing</span></div>
   <div class="settings-foot performance-readout"><span id="performanceStatusDot"></span><span id="performanceStatusText">Render health · waiting for a reveal</span></div>

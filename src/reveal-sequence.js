@@ -7,6 +7,7 @@ export function createRevealSequence({
   draftedby,
   escapeHtml,
   getState,
+  getMotionState,
   gridview,
   hexToRgba,
   logopattern,
@@ -147,6 +148,10 @@ export function createRevealSequence({
   }
 
   function runPickCallStage(pick, backlog, token) {
+    if (getMotionState().effective === "reduced") {
+      runCardStage(pick, backlog, token);
+      return;
+    }
     revealStage = "signal";
     const catchUp = isMockCatchUp(backlog);
     spotlight.classList.toggle("catch-up", catchUp);

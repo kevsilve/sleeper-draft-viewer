@@ -61,6 +61,7 @@ import {
   mockModeToggle,
   teamBuildToggle,
   settingsSoundToggle,
+  motionModeButtons,
   replayRevealBtn,
   modeStatusText,
   performanceStatusText,
@@ -85,6 +86,12 @@ import { bindGlobalControls } from "./controls.js";
 import { createBoardViews } from "./board-views.js";
 import { createRecap } from "./recap.js";
 import { createRevealSequence } from "./reveal-sequence.js";
+import {
+  MOTION_MODE_AUTO,
+  createAutoMotionMonitor,
+  defaultMotionMode,
+  effectiveMotionMode
+} from "./motion-policy.js";
 /** @typedef {import("./draft-types.js").DraftEvent} DraftEvent */
 /** @typedef {import("./draft-types.js").DraftPick} DraftPick */
 const RADIUS = 28;
@@ -101,12 +108,40 @@ let adpAvailable = false;
 let leagueContext = { roster_positions: [], scoring_settings: {}, draft_settings: {}, scoring_type: null };
 let clockRenderKey = "";
 let timerRenderKey = "";
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const lowPowerMode = reduceMotion || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || (navigator.deviceMemory && navigator.deviceMemory <= 4);
-document.body.classList.toggle("low-power", lowPowerMode);
+const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+let defaultSelectedMotionMode = defaultMotionMode(reducedMotionQuery.matches);
+let selectedMotionMode = defaultSelectedMotionMode;
+let autoMotionDegraded = false;
+const autoMotionMonitor = createAutoMotionMonitor();
 let performanceRaf = 0;
 let performanceLastFrame = 0;
-let performanceSamples = [];
+
+function getMotionState() {
+  return {
+    autoDegraded: autoMotionDegraded,
+    effective: effectiveMotionMode(selectedMotionMode, autoMotionDegraded),
+    selected: selectedMotionMode
+  };
+}
+
+function applyMotionState() {
+  const motion = getMotionState();
+  document.body.dataset.motionMode = motion.selected;
+  document.body.dataset.motionEffective = motion.effective;
+  document.body.classList.toggle("motion-reduced", motion.effective === "reduced");
+  document.body.classList.toggle("motion-auto-degraded", motion.selected === MOTION_MODE_AUTO && motion.autoDegraded);
+}
+
+function setMotionMode(mode) {
+  selectedMotionMode = mode;
+  autoMotionDegraded = false;
+  autoMotionMonitor.reset();
+  performanceStatusText.textContent = mode === MOTION_MODE_AUTO
+    ? "Render health · Auto is measuring reveals"
+    : `Render health · ${mode === "full" ? "Full" : "Reduced"} motion selected`;
+  performanceReadout.classList.remove("good", "warn");
+  applyMotionState();
+}
 
 const {
   render: renderBroadcastSettings,
@@ -115,11 +150,14 @@ const {
   togglePanel: toggleSettingsPanel
 } = createSettingsController({
   getPickCount: () => allPicks.length,
+  getDefaultMotionMode: () => defaultSelectedMotionMode,
   modeStatusText,
   mockModeToggle,
+  motionModeButtons,
   onMockModeEnabled: () => {
     revealController.trimBacklog();
   },
+  onMotionChange: setMotionMode,
   onReplayLatest: () => {
     const latestPick = allPicks[allPicks.length - 1];
     if (latestPick) queueReveal(latestPick);
@@ -132,36 +170,49 @@ const {
   settingsSoundToggle,
   teamBuildToggle
 });
+setMotionMode(broadcastSettings.motionMode || defaultSelectedMotionMode);
+
+reducedMotionQuery.addEventListener("change", (event) => {
+  defaultSelectedMotionMode = defaultMotionMode(event.matches);
+  if (!broadcastSettings.motionMode) setMotionMode(defaultSelectedMotionMode);
+  renderBroadcastSettings();
+});
 
 function monitorRevealPerformance(timestamp) {
   if (!spotlight.classList.contains("active")) {
     performanceRaf = 0;
     performanceLastFrame = 0;
-    performanceSamples = [];
+    autoMotionMonitor.reset();
     return;
   }
   if (performanceLastFrame) {
     const delta = timestamp - performanceLastFrame;
-    if (delta > 0 && delta < 120) performanceSamples.push(delta);
+    const result = autoMotionMonitor.recordFrame(delta);
+    if (result) {
+      const healthy = result.fps >= 52;
+      const autoReduced = selectedMotionMode === MOTION_MODE_AUTO && result.degraded;
+      performanceStatusText.textContent = autoReduced
+        ? `Render health · Auto reduced motion after sustained ${result.fps} FPS`
+        : healthy
+          ? `Render health · smooth at ${result.fps} FPS`
+          : `Render health · under load at ${result.fps} FPS`;
+      performanceReadout.classList.toggle("good", healthy && !autoReduced);
+      performanceReadout.classList.toggle("warn", !healthy || autoReduced);
+      if (autoReduced) {
+        autoMotionDegraded = true;
+        applyMotionState();
+      }
+    }
   }
   performanceLastFrame = timestamp;
-  if (performanceSamples.length >= 45) {
-    const recent = performanceSamples.slice(-90);
-    const average = recent.reduce((sum, value) => sum + value, 0) / recent.length;
-    const fps = Math.round(1000 / average);
-    const healthy = fps >= 52;
-    performanceStatusText.textContent = healthy ? `Render health · smooth at ${fps} FPS` : `Render health · under load at ${fps} FPS`;
-    performanceReadout.classList.toggle("good", healthy);
-    performanceReadout.classList.toggle("warn", !healthy);
-    if (performanceSamples.length > 90) performanceSamples = recent;
-  }
   performanceRaf = requestAnimationFrame(monitorRevealPerformance);
 }
 
 function startRevealPerformanceMonitor() {
   if (performanceRaf) return;
+  if (selectedMotionMode === MOTION_MODE_AUTO && autoMotionDegraded) return;
   performanceLastFrame = 0;
-  performanceSamples = [];
+  autoMotionMonitor.reset();
   performanceRaf = requestAnimationFrame(monitorRevealPerformance);
 }
 
@@ -244,7 +295,7 @@ soundbtn.onclick = () => setSoundEnabled(muted);
 // CONFETTI
 // ==================================================
 const canvas = document.getElementById("confetti-canvas");
-const { burstReveal, resetRevealBurst } = createRevealEffects({ canvas, lowPowerMode, reduceMotion });
+const { burstReveal, resetRevealBurst } = createRevealEffects({ canvas, getMotionState });
 
 // ==================================================
 // TIMER
@@ -388,6 +439,7 @@ revealController = createRevealSequence({
   card,
   draftedby,
   escapeHtml,
+  getMotionState,
   getState: () => ({ allPicks, teamsOrder, currentTeams, currentRounds, draftStatus, latestClock }),
   gridview,
   hexToRgba,
